@@ -1,0 +1,104 @@
+cmake_minimum_required(VERSION 3.19)
+project(mkFolderWidget LANGUAGES CXX)
+
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Concurrent LinguistTools DBus)
+
+if(UNIX)
+    find_package(ZLIB REQUIRED)
+else()
+    include(FetchContent)
+
+    FetchContent_Declare(
+    zlib
+    GIT_REPOSITORY https://github.com/madler/zlib.git
+    GIT_TAG        v1.3.1 # Oder eine andere stabile Version
+    )
+
+    # Schaltet ZLIB-eigene Tests und Installation aus, damit es schneller geht
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(zlib)
+endif()
+
+qt_standard_project_setup()
+
+# Diese Zeile ist entscheidend, damit Qt die Ressourcen kompiliert!
+set(CMAKE_AUTORCC ON)
+
+# --- PERFORMANCE FLAGS START ---
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+include(CheckIPOSupported)
+check_ipo_supported(RESULT result)
+if(result)
+    # Aktiviert LTO/IPO für alle Targets
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
+if(MSVC)
+    add_compile_options(/O2 /Ot /GL /arch:AVX2)
+else()
+    # -O3: Aggressive Optimierung
+    # -march=native: Nutzt SSE/AVX der aktuellen CPU
+    # -flto: Link Time Optimization
+    # -fomit-frame-pointer: Befreit ein Register für Daten (statt Stack-Tracking)
+    add_compile_options(-O3 -march=native -flto -fomit-frame-pointer)
+endif()
+# --- PERFORMANCE FLAGS END ---
+
+qt_add_executable(mkFolderWidget
+    WIN32 MACOSX_BUNDLE
+    src/main.cpp
+    src/mainwindow.h src/mainwindow.cpp
+    src/helpers.h src/helpers.cpp
+    src/settingsmanager.h src/settingsmanager.cpp
+    src/filepropertiesdialog.h src/filepropertiesdialog.cpp
+    src/custommodel.h src/custommodel.cpp
+    src/filesortproxymodel.h src/filesortproxymodel.cpp
+    src/fileoperation.h src/fileoperation.cpp
+    src/customtableview.h src/customtableview.cpp
+    src/customlistview.h src/customlistview.cpp
+    res/resources.qrc
+)
+
+target_include_directories(mkFolderWidget PRIVATE src)
+
+qt_add_translations(mkFolderWidget
+    TS_FILES i18n/mkFolderWidget_de.ts
+)
+
+target_link_libraries(mkFolderWidget
+    PRIVATE
+        Qt::Core
+        Qt::Widgets
+        Qt6::Concurrent
+        Qt6::DBus
+        $<$<PLATFORM_ID:Windows>:zlibstatic>
+        $<$<PLATFORM_ID:Linux>:ZLIB::ZLIB>
+)
+
+# Beschleunigt den Start unter Linux, indem ungenutzte Shared Libraries ignoriert werden
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(mkFolderWidget PRIVATE -Wl,--as-needed)
+endif()
+
+install(TARGETS mkFolderWidget
+    BUNDLE  DESTINATION .
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+qt_generate_deploy_app_script(
+    TARGET mkFolderWidget
+    OUTPUT_SCRIPT deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${deploy_script})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+)
