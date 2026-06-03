@@ -7,6 +7,7 @@
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
+#include <QTimer>
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -124,44 +125,75 @@ void CustomTableView::dropEvent(QDropEvent *event) {
     updateTargetCache(event->position().toPoint(), event->mimeData());
 
     if (event->mimeData()->hasFormat("application/x-rightclickdrag")) {
-        QMenu menu(this);
+        // 1. DATEN DIREKT SICHERN (bevor das Event zerstört wird)
+        QList<QUrl> urls = event->mimeData()->urls();
+        QPoint pos = event->position().toPoint();
+        QModelIndex targetIndex = indexAt(pos);
 
-        QAction *actCopy = new QAction(tr("Copy here"), &menu);
-        QAction *actMove = new QAction(tr("Move here"), &menu);
-        QAction *actLink = new QAction(tr("Link here"), &menu);
-        QAction *actCancel = new QAction(tr("Cancel"), &menu);
+        // 2. NATIVEN LOOP SOFORT BEENDEN (Löst den Linux-Mauszeiger/Grab auf)
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
 
-        menu.addAction(actCopy);
-        if (!m_isSameFolderCached) {
-            menu.addAction(actMove);
-        }
-        menu.addAction(actLink);
-        menu.addSeparator();
-        menu.addAction(actCancel);
+        // 3. MENÜ ASYNCHRON ÖFFNEN
+        QTimer::singleShot(0, this, [this, urls, pos, targetIndex]() {
 
-        if (m_isSameFolderCached || !m_isSameDriveCached) {
-            menu.setDefaultAction(actCopy);
-        } else {
-            menu.setDefaultAction(actMove);
-        }
+            QAbstractItemModel *currentModel = model();
+            QModelIndex sourceIndex = targetIndex;
 
-        QAction *selectedAction = menu.exec(mapToGlobal(event->position().toPoint()));
+            while (auto proxy = qobject_cast<QAbstractProxyModel*>(currentModel)) {
+                currentModel = proxy->sourceModel();
+                sourceIndex = proxy->mapToSource(sourceIndex);
+            }
+            auto *customModel = qobject_cast<CustomTableModel*>(currentModel);
+            if (!customModel) return;
 
-        if (selectedAction == actCopy) {
-            event->setDropAction(Qt::CopyAction);
-        } else if (selectedAction == actMove) {
-            event->setDropAction(Qt::MoveAction);
-        } else if (selectedAction == actLink) {
-            event->setDropAction(Qt::LinkAction);
-        } else {
-            event->ignore();
-            return;
-        }
+            QString targetDir = customModel->currentDirectoryPath();
+
+            if (sourceIndex.isValid()) {
+                int parentRow = sourceIndex.row();
+                if (parentRow >= 0 && parentRow < customModel->rowCount()) {
+                    if (customModel->isDirectory(sourceIndex.row())) {
+                        targetDir = customModel->filePath(sourceIndex);
+                    }
+                }
+            }
+
+            QMenu menu(this);
+            QAction *actCopy = new QAction(tr("Copy here"), &menu);
+            QAction *actMove = new QAction(tr("Move here"), &menu);
+            QAction *actLink = new QAction(tr("Link here"), &menu);
+            QAction *actCancel = new QAction(tr("Cancel"), &menu);
+
+            menu.addAction(actCopy);
+            if (!m_isSameFolderCached) {
+                menu.addAction(actMove);
+            }
+            menu.addAction(actLink);
+            menu.addSeparator();
+            menu.addAction(actCancel);
+
+            if (m_isSameFolderCached || !m_isSameDriveCached) {
+                menu.setDefaultAction(actCopy);
+            } else {
+                menu.setDefaultAction(actMove);
+            }
+
+            QAction *selectedAction = menu.exec(mapToGlobal(pos));
+
+            Qt::DropAction chosenAction = Qt::IgnoreAction;
+            if (selectedAction == actCopy)  chosenAction = Qt::CopyAction;
+            else if (selectedAction == actMove)  chosenAction = Qt::MoveAction;
+            else if (selectedAction == actLink)  chosenAction = Qt::LinkAction;
+            else return;
+
+            emit filesDropped(urls, targetDir, chosenAction);
+        });
+
+        return;
     } else {
         event->setDropAction(resolveDropAction(event->modifiers()));
+        QAbstractItemView::dropEvent(event);
     }
-
-    QAbstractItemView::dropEvent(event);
 }
 
 bool CustomTableView::edit(const QModelIndex &index, EditTrigger trigger, QEvent *event) {

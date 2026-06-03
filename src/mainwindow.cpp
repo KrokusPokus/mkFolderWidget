@@ -910,6 +910,10 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     connect(m_fileSystemWatcher, &QFileSystemWatcher::directoryChanged, this, &MainWindow::onDirectoryChangedOnDisk);
     connect(m_LineEdit1, &QLineEdit::textChanged, this, &MainWindow::onFilterBoxChange);
     connect(m_abstractModel, &CustomTableModel::filesDropped, this, [this](const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action) {onFilesDropped(urls, targetDir, action, false); });
+    connect(m_listView, &CustomListView::filesDropped, this, [this](const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action) {onFilesDropped(urls, targetDir, action, false); });
+    connect(m_thumbnailView, &CustomListView::filesDropped, this, [this](const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action) {onFilesDropped(urls, targetDir, action, false); });
+    connect(m_tableView, &CustomTableView::filesDropped, this, [this](const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action) {onFilesDropped(urls, targetDir, action, false); });
+
 
     QString showDir = targetDirectory;
     if (showDir.isEmpty() || !QDir(showDir).exists()) {
@@ -1729,7 +1733,7 @@ void MainWindow::onFilesDropped(const QList<QUrl> &urlList, const QString &targe
                     actionWord = tr("Overwrite");
                 }
 
-                sText = QString(tr("%1").arg(QDir::toNativeSeparators(conflict.targetPath)));
+                sText = QString("%1").arg(QDir::toNativeSeparators(conflict.targetPath));
 
                 QMessageBox msgBox(this);
                 msgBox.setWindowTitle(sTitle);
@@ -1761,24 +1765,24 @@ void MainWindow::onFilesDropped(const QList<QUrl> &urlList, const QString &targe
                             <td style='color: #FF0000; padding: 2px 8px;'>%3</td>
                         </tr>
                         <tr>
-                            <td style='color: #0000FF; padding: 2px 8px; text-align: right;'>%4</td>
-                            <td style='color: #0000FF; padding: 2px 8px;'>%5</td>
+                            <td style='color: #6060FF; padding: 2px 8px; text-align: right;'>%4</td>
+                            <td style='color: #6060FF; padding: 2px 8px;'>%5</td>
                         </tr>
                         <tr>
                             <td style='color: #FF0000; padding: 10px 8px 2px 8px; text-align: right;'>%6</td>
                             <td style='color: #FF0000; padding: 10px 8px 2px 8px;'>%7</td>
                         </tr>
                         <tr>
-                            <td style='color: #0000FF; padding: 2px 8px; text-align: right;'>%8</td>
-                            <td style='color: #0000FF; padding: 2px 8px;'>%9</td>
+                            <td style='color: #6060FF; padding: 2px 8px; text-align: right;'>%8</td>
+                            <td style='color: #6060FF; padding: 2px 8px;'>%9</td>
                         </tr>
                         <tr>
                             <td style='color: #FF0000; padding: 10px 8px 2px 8px; text-align: right;'>%10</td>
                             <td style='color: #FF0000; padding: 10px 8px 2px 8px;'>0x%11</td>
                         </tr>
                         <tr>
-                            <td style='color: #0000FF; padding: 2px 8px; text-align: right;'>%12</td>
-                            <td style='color: #0000FF; padding: 2px 8px;'>0x%13</td>
+                            <td style='color: #6060FF; padding: 2px 8px; text-align: right;'>%12</td>
+                            <td style='color: #6060FF; padding: 2px 8px;'>0x%13</td>
                         </tr>
                     </table>
                     )");

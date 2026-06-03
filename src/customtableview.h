@@ -10,6 +10,9 @@ class QRubberBand;
 class CustomTableView : public QTableView {
     Q_OBJECT
 
+signals:
+    void filesDropped(const QList<QUrl> &urls, const QString &targetDirectory, Qt::DropAction action);
+
 public:
     explicit CustomTableView(QWidget *parent = nullptr);
 

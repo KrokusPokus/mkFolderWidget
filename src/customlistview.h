@@ -10,6 +10,9 @@
 class CustomListView : public QListView {
     Q_OBJECT
 
+signals:
+    void filesDropped(const QList<QUrl> &urls, const QString &targetDirectory, Qt::DropAction action);
+
 public:
     explicit CustomListView(QWidget *parent = nullptr);
 

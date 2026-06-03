@@ -4,22 +4,22 @@
 <context>
     <name>CustomListView</name>
     <message>
-        <location filename="../src/customlistview.cpp" line="68"/>
+        <location filename="../src/customlistview.cpp" line="119"/>
         <source>Copy here</source>
         <translation>Hierher kopieren</translation>
     </message>
     <message>
-        <location filename="../src/customlistview.cpp" line="69"/>
+        <location filename="../src/customlistview.cpp" line="120"/>
         <source>Move here</source>
         <translation>Hierher verschieben</translation>
     </message>
     <message>
-        <location filename="../src/customlistview.cpp" line="70"/>
+        <location filename="../src/customlistview.cpp" line="121"/>
         <source>Link here</source>
         <translation>Hierher verknüpfen</translation>
     </message>
     <message>
-        <location filename="../src/customlistview.cpp" line="72"/>
+        <location filename="../src/customlistview.cpp" line="122"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
@@ -27,22 +27,22 @@
 <context>
     <name>CustomTableModel</name>
     <message>
-        <location filename="../src/custommodel.cpp" line="137"/>
+        <location filename="../src/customtablemodel.cpp" line="137"/>
         <source>Name</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/custommodel.cpp" line="139"/>
+        <location filename="../src/customtablemodel.cpp" line="139"/>
         <source>Size</source>
         <translation>Größe</translation>
     </message>
     <message>
-        <location filename="../src/custommodel.cpp" line="141"/>
+        <location filename="../src/customtablemodel.cpp" line="141"/>
         <source>Changed</source>
         <translation>Geändert</translation>
     </message>
     <message>
-        <location filename="../src/custommodel.cpp" line="143"/>
+        <location filename="../src/customtablemodel.cpp" line="143"/>
         <source>Type</source>
         <translation>Typ</translation>
     </message>
@@ -50,24 +50,37 @@
 <context>
     <name>CustomTableView</name>
     <message>
-        <location filename="../src/customtableview.cpp" line="67"/>
+        <location filename="../src/customtableview.cpp" line="129"/>
         <source>Copy here</source>
         <translation>Hierher kopieren</translation>
     </message>
     <message>
-        <location filename="../src/customtableview.cpp" line="68"/>
+        <location filename="../src/customtableview.cpp" line="130"/>
         <source>Move here</source>
         <translation>Hierher verschieben</translation>
     </message>
     <message>
-        <location filename="../src/customtableview.cpp" line="69"/>
+        <location filename="../src/customtableview.cpp" line="131"/>
         <source>Link here</source>
         <translation>Hierher verknüpfen</translation>
     </message>
     <message>
-        <location filename="../src/customtableview.cpp" line="71"/>
+        <location filename="../src/customtableview.cpp" line="132"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
+    </message>
+</context>
+<context>
+    <name>FileOperation</name>
+    <message>
+        <location filename="../src/fileoperation.cpp" line="218"/>
+        <source> (Copy)</source>
+        <translation> (Kopie)</translation>
+    </message>
+    <message>
+        <location filename="../src/fileoperation.cpp" line="218"/>
+        <source> (Copy %1)</source>
+        <translation> (Kopie %1)</translation>
     </message>
 </context>
 <context>
@@ -334,7 +347,7 @@ Do you have sufficient rights?</source>
         <translation type="vanished">Ordner</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="742"/>
+        <location filename="../src/mainwindow.cpp" line="782"/>
         <source>Folder</source>
         <translation>Ordner</translation>
     </message>
@@ -371,12 +384,12 @@ Do you have sufficient rights?</source>
         <translation type="vanished">Unterordner</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="663"/>
+        <location filename="../src/mainwindow.cpp" line="703"/>
         <source>Open</source>
         <translation>Öffnen</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="671"/>
+        <location filename="../src/mainwindow.cpp" line="711"/>
         <source>Edit</source>
         <translation>Bearbeiten</translation>
     </message>
@@ -385,58 +398,127 @@ Do you have sufficient rights?</source>
         <translation type="vanished">In Ordner anzeigen</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="679"/>
+        <location filename="../src/mainwindow.cpp" line="719"/>
         <source>Copy Path</source>
         <translation>Pfad kopieren</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="688"/>
+        <location filename="../src/mainwindow.cpp" line="728"/>
         <source>Cut</source>
         <translation>Ausschneiden</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="697"/>
+        <location filename="../src/mainwindow.cpp" line="737"/>
         <source>Copy</source>
         <translation>Kopieren</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="706"/>
-        <location filename="../src/mainwindow.cpp" line="2101"/>
+        <location filename="../src/mainwindow.cpp" line="746"/>
+        <location filename="../src/mainwindow.cpp" line="2364"/>
         <source>Delete</source>
         <translation>Löschen</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="715"/>
+        <location filename="../src/mainwindow.cpp" line="755"/>
         <source>Rename</source>
         <translation>Umbenennen</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="724"/>
+        <location filename="../src/mainwindow.cpp" line="764"/>
         <source>Properties</source>
         <translation>Eigenschaften</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1688"/>
+        <location filename="../src/mainwindow.cpp" line="805"/>
+        <source>List</source>
+        <translation>Liste</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="813"/>
+        <source>Details</source>
+        <translation>Details</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="821"/>
+        <source>Thumbnails</source>
+        <translation>Thumbnails</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1188"/>
+        <source>View</source>
+        <translation>Ansichtsmodus</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1725"/>
+        <source>Folder already exists</source>
+        <translation>Ordner existiert bereits</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1726"/>
+        <source>Merge</source>
+        <translation>Zusammenführen</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1728"/>
+        <source>File already exists</source>
+        <translation>Datei existiert bereits</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1729"/>
+        <source>Overwrite</source>
+        <translation>Überschreiben</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1790"/>
+        <location filename="../src/mainwindow.cpp" line="1795"/>
+        <location filename="../src/mainwindow.cpp" line="1800"/>
+        <source>Source:</source>
+        <translation>Quelle:</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1792"/>
+        <location filename="../src/mainwindow.cpp" line="1797"/>
+        <location filename="../src/mainwindow.cpp" line="1802"/>
+        <source>Target:</source>
+        <translation>Ziel:</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1807"/>
+        <source> all</source>
+        <translation> (alle)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1808"/>
+        <source>Skip</source>
+        <translation>Überspringen</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1809"/>
+        <source>Skip all</source>
+        <translation>Überspringen (alle)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="1898"/>
         <source>New Text Document</source>
         <translation>Neue Textdatei</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2027"/>
+        <location filename="../src/mainwindow.cpp" line="2288"/>
         <source>Do you really want to move these %1 files into the recycle bin?</source>
         <translation>Möchtest du diese %1 Dateien wirklich in den Papierkorb verschieben?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2088"/>
+        <location filename="../src/mainwindow.cpp" line="2351"/>
         <source>Name:</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2090"/>
+        <location filename="../src/mainwindow.cpp" line="2353"/>
         <source>Size:</source>
         <translation>Größe:</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2092"/>
+        <location filename="../src/mainwindow.cpp" line="2355"/>
         <source>Date:</source>
         <translation>Datum:</translation>
     </message>
@@ -461,37 +543,37 @@ Do you have sufficient rights?</source>
         <translation type="vanished">%1 (%2 Treffer innerhalb %3 Dateien von insgesammt %4 untersuchten)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="74"/>
+        <location filename="../src/mainwindow.cpp" line="76"/>
         <source>(filter terms)</source>
         <translation>(Filter-Begriffe)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="733"/>
+        <location filename="../src/mainwindow.cpp" line="773"/>
         <source>Paste</source>
         <translation>Einfügen</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="751"/>
+        <location filename="../src/mainwindow.cpp" line="795"/>
         <source>Text File</source>
         <translation>Textdatei</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1111"/>
+        <location filename="../src/mainwindow.cpp" line="1202"/>
         <source>New</source>
         <translation>Neu</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1636"/>
+        <location filename="../src/mainwindow.cpp" line="1846"/>
         <source>New Folder</source>
         <translation>Neuer Ordner</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1126"/>
+        <location filename="../src/mainwindow.cpp" line="1220"/>
         <source>Send to</source>
         <translation>Senden an</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1173"/>
+        <location filename="../src/mainwindow.cpp" line="1267"/>
         <source>Open with</source>
         <translation>Öffnen mit</translation>
     </message>
@@ -500,19 +582,19 @@ Do you have sufficient rights?</source>
         <translation type="vanished">Dateien werden kopiert...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2023"/>
-        <location filename="../src/mainwindow.cpp" line="2033"/>
+        <location filename="../src/mainwindow.cpp" line="2284"/>
+        <location filename="../src/mainwindow.cpp" line="2294"/>
         <source>Delete File</source>
         <translation>Datei löschen</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2024"/>
+        <location filename="../src/mainwindow.cpp" line="2285"/>
         <source>Do you really want to move this file into the recycle bin?</source>
         <translation>Möchtest du diese Datei wirklich in den Papierkorb verschieben?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2026"/>
-        <location filename="../src/mainwindow.cpp" line="2036"/>
+        <location filename="../src/mainwindow.cpp" line="2287"/>
+        <location filename="../src/mainwindow.cpp" line="2297"/>
         <source>Delete multiple elements</source>
         <translation>Mehrere Dateien löschen</translation>
     </message>
@@ -521,17 +603,17 @@ Do you have sufficient rights?</source>
         <translation type="vanished">Möchtest du diese %1 Dateien wirklich in den Papierkorb verschieben?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2031"/>
+        <location filename="../src/mainwindow.cpp" line="2292"/>
         <source>This process cannot be undone.</source>
         <translation>Dieser Vorgang kann nicht rückgängig gemacht werden.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2034"/>
+        <location filename="../src/mainwindow.cpp" line="2295"/>
         <source>Are you sure you want to delete this file permanently?</source>
         <translation>Möchtest du diese Datei wirklich unwiderruflich löschen?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2037"/>
+        <location filename="../src/mainwindow.cpp" line="2298"/>
         <source>Are you sure you want to delete these %1 files permanently?</source>
         <translation>Möchtest du diese %1 Datei(en) wirklich unwiderruflich löschen?</translation>
     </message>
@@ -540,7 +622,8 @@ Do you have sufficient rights?</source>
         <translation type="obsolete">&lt;table width=&apos;100%&apos; cellspacing=&apos;0&apos; cellpadding=&apos;0&apos;&gt;&lt;tr&gt;&lt;td rowspan=4 width=&apos;48&apos; valign=&apos;top&apos; style=&apos;padding-right: 10px;&apos;&gt;&lt;img src=&apos;data:image/png;base64,%1&apos;&gt;&lt;/td&gt;&lt;td style=&apos;color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos; width=&apos;1%&apos;&gt;Name:&lt;/td&gt;&lt;td style=&apos;color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos;&gt;%2&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&apos;color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos;&gt;Größe:&lt;/td&gt;&lt;td style=&apos;color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos;&gt;%3&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&apos;color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos;&gt;Geändert:&lt;/td&gt;&lt;td style=&apos;color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos;&gt;%4&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td colspan=2 style=&apos;padding-top: 8px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;&apos;&gt;%5&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2102"/>
+        <location filename="../src/mainwindow.cpp" line="1810"/>
+        <location filename="../src/mainwindow.cpp" line="2365"/>
         <source>Cancel</source>
         <translation>Abbrechen</translation>
     </message>
@@ -581,14 +664,12 @@ Do you have sufficient rights?</source>
 <context>
     <name>QObject</name>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1612"/>
         <source>File already exists</source>
-        <translation>Datei existiert bereits</translation>
+        <translation type="vanished">Datei existiert bereits</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1613"/>
         <source>&apos;%1&apos; already exists in the target folder. Overwrite?</source>
-        <translation>&apos;%1&apos; existiert bereits im Ziel-Ordner. Überschreiben?</translation>
+        <translation type="vanished">&apos;%1&apos; existiert bereits im Ziel-Ordner. Überschreiben?</translation>
     </message>
 </context>
 <context>
