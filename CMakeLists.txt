@@ -55,7 +55,7 @@ qt_add_executable(mkFolderWidget
     src/helpers.h src/helpers.cpp
     src/settingsmanager.h src/settingsmanager.cpp
     src/filepropertiesdialog.h src/filepropertiesdialog.cpp
-    src/custommodel.h src/custommodel.cpp
+    src/customtablemodel.h src/customtablemodel.cpp
     src/filesortproxymodel.h src/filesortproxymodel.cpp
     src/fileoperation.h src/fileoperation.cpp
     src/customtableview.h src/customtableview.cpp

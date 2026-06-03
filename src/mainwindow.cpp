@@ -36,6 +36,8 @@
 #include <QStringView>
 #include <QThread>
 #include <QUrl>
+#include <QImageReader>
+
 #include <utility> // Für std::as_const
 
 #ifdef Q_OS_WIN
@@ -92,7 +94,9 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 
     m_tableView = new CustomTableView(this);
     m_tableView->setModel(m_proxyModel);
-    m_tableView->setItemDelegate(new TableItemDelegate(this));
+    m_tableView->setItemDelegate(new TableItemDelegate(m_tableView));
+    m_tableView->setStyle(new CustomDropIndicatorStyle());
+
     m_tableView->setEditTriggers(QAbstractItemView::EditKeyPressed | QAbstractItemView::SelectedClicked);
     m_tableView->setContextMenuPolicy(Qt::NoContextMenu);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -112,7 +116,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 
     m_tableView->setDragEnabled(true);
     m_tableView->setAcceptDrops(true);
-    m_tableView->setDropIndicatorShown(false);
+    m_tableView->setDropIndicatorShown(true);
     m_tableView->setDragDropMode(QAbstractItemView::DragDrop);
     m_tableView->setDefaultDropAction(Qt::MoveAction);
 
@@ -123,16 +127,20 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "QTableView {"
             "    border: none;"
             "    background-color: #aa0000;"
-            "    alternate-background-color: #282828;"
+            "    alternate-background-color: #880000;"
             "    color: #ffffff;"
             "}"
-            // Aktive Auswahl
-            "QTableView::item:selected:active {"
+            "QListView::item:hover {"
+            "    background-color: #aa0000;"
+            "    color: #ffffff;"
+            "}"
+            "QTableView::item:selected:active,"
+            "QTableView::item:selected:active:hover {"
             "    background-color: #6b69d6;"
             "    color: white;"
             "}"
-            // Inaktive Auswahl (wenn die InputBox den Fokus hat)
-            "QTableView::item:selected:!active {"
+            "QTableView::item:selected:!active,"
+            "QTableView::item:selected:!active:hover {"
             "    background-color: #505050;"
             "    color: white;"
             "}"
@@ -142,11 +150,14 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    border: none;"
             "}"
             "QHeaderView::section {"
-            "    background-color: #3b3b3b;"
+            "    border: none;" // Needed to disable native OS style that otherwise prevents background-color from working
+            "    background-color: #404040;"
             "    color: #ffffff;"
             "    font-weight: normal;"
             "    border-bottom: 1px solid #616161;"
             "    border-right: 1px solid #616161;"
+            "    padding-left: 6px;"
+            "    padding-right: 6px;"
             "}"
             );
     } else {
@@ -158,13 +169,17 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    alternate-background-color: #282828;"
             "    color: #ffffff;"
             "}"
-            // Aktive Auswahl
-            "QTableView::item:selected:active {"
+            "QListView::item:hover {"
+            "    background-color: #2e2e2e;"
+            "    color: #ffffff;"
+            "}"
+            "QTableView::item:selected:active,"
+            "QTableView::item:selected:active:hover {"
             "    background-color: #6b69d6;"
             "    color: white;"
             "}"
-            // Inaktive Auswahl (wenn die InputBox den Fokus hat)
-            "QTableView::item:selected:!active {"
+            "QTableView::item:selected:!active,"
+            "QTableView::item:selected:!active:hover {"
             "    background-color: #505050;"
             "    color: white;"
             "}"
@@ -174,11 +189,14 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    border: none;"
             "}"
             "QHeaderView::section {"
-            "    background-color: #3b3b3b;"
+            "    border: none;" // Needed to disable native OS style that otherwise prevents background-color from working
+            "    background-color: #404040;"
             "    color: #ffffff;"
             "    font-weight: normal;"
             "    border-bottom: 1px solid #616161;"
             "    border-right: 1px solid #616161;"
+            "    padding-left: 6px;"
+            "    padding-right: 6px;"
             "}"
             );
     }
@@ -281,11 +299,13 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     m_listView = new CustomListView(this);
     m_listView->setModel(m_proxyModel);
     m_listView->setItemDelegate(new ListItemDelegate(this));
+    m_listView->setStyle(new CustomDropIndicatorStyle());
     m_listView->setViewMode(QListView::IconMode);
     m_listView->setFlow(QListView::TopToBottom);
     m_listView->setWrapping(true);
     m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    //m_listView->setHorizontalScrollMode(QAbstractItemView::ScrollPerItem); // doesn't work
     m_listView->setResizeMode(QListView::Adjust);
     m_listView->setIconSize(QSize(16, 16));
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -294,7 +314,8 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 
     m_listView->setDragEnabled(true);
     m_listView->setAcceptDrops(true);
-    m_listView->setDropIndicatorShown(false);
+    m_listView->setDropIndicatorShown(true);
+    m_listView->setDragDropOverwriteMode(true);
     m_listView->setDragDropMode(QAbstractItemView::DragDrop);
     m_listView->setDefaultDropAction(Qt::MoveAction);
 
@@ -316,13 +337,17 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    padding-bottom: 0px;"
             "    height: 18px;"
             "}"
-            // Aktive Auswahl
-            "QListView::item:selected:active {"
+            "QListView::item:hover {"
+            "    background-color: #aa0000;"
+            "    color: #ffffff;"
+            "}"
+            "QListView::item:selected:active,"
+            "QListView::item:selected:active:hover {"
             "    background-color: #6b69d6;"
             "    color: white;"
             "}"
-            // Inaktive Auswahl (wenn die InputBox den Fokus hat)
-            "QListView::item:selected:!active {"
+            "QListView::item:selected:!active,"
+            "QListView::item:selected:!active:hover {"
             "    background-color: #505050;"
             "    color: white;"
             "}"
@@ -345,13 +370,17 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    padding-bottom: 0px;"
             "    height: 18px;"
             "}"
-            // Aktive Auswahl
-            "QListView::item:selected:active {"
+            "QListView::item:hover {"
+            "    background-color: #2e2e2e;"
+            "    color: #ffffff;"
+            "}"
+            "QListView::item:selected:active,"
+            "QListView::item:selected:active:hover {"
             "    background-color: #6b69d6;"
             "    color: white;"
             "}"
-            // Inaktive Auswahl (wenn die InputBox den Fokus hat)
-            "QListView::item:selected:!active {"
+            "QListView::item:selected:!active,"
+            "QListView::item:selected:!active:hover {"
             "    background-color: #505050;"
             "    color: white;"
             "}"
@@ -473,18 +502,21 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     m_thumbnailView = new CustomListView(this);
     m_thumbnailView->setModel(m_proxyModel);
     m_thumbnailView->setItemDelegate(new ThumbItemDelegate(this));
+    m_thumbnailView->setStyle(new CustomDropIndicatorStyle());
     m_thumbnailView->setSelectionModel(m_selectionModel);
     m_thumbnailView->setViewMode(QListView::IconMode);
     m_thumbnailView->setResizeMode(QListView::Adjust);
     m_thumbnailView->setIconSize(QSize(96, 96));
-    m_thumbnailView->setGridSize(QSize(120, 130)); // 96x96 fürs Bild + Platz für Text darunter
-    m_thumbnailView->setUniformItemSizes(true);   // Enormer Performance-Schub für Qt!
+    m_thumbnailView->setGridSize(QSize());
+    //m_thumbnailView->setUniformItemSizes(true);   // Enormer Performance-Schub für Qt!
+    m_thumbnailView->setSpacing(2);
     m_thumbnailView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_thumbnailView->setContextMenuPolicy(Qt::NoContextMenu);
     m_thumbnailView->setEditTriggers(QAbstractItemView::EditKeyPressed | QAbstractItemView::SelectedClicked);
     m_thumbnailView->setDragEnabled(true);
     m_thumbnailView->setAcceptDrops(true);
-    m_thumbnailView->setDropIndicatorShown(false);
+    m_thumbnailView->setDropIndicatorShown(true);
+    m_thumbnailView->setDragDropOverwriteMode(true);
     m_thumbnailView->setDragDropMode(QAbstractItemView::DragDrop);
     m_thumbnailView->setDefaultDropAction(Qt::MoveAction);
 
@@ -502,13 +534,17 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    padding-bottom: 0px;"
             "    height: 18px;"
             "}"
-            // Aktive Auswahl
-            "QListView::item:selected:active {"
+            "QListView::item:hover {"
+            "    background-color: #aa0000;"
+            "    color: #ffffff;"
+            "}"
+            "QListView::item:selected:active,"
+            "QListView::item:selected:active:hover {"
             "    background-color: #6b69d6;"
             "    color: white;"
             "}"
-            // Inaktive Auswahl (wenn die InputBox den Fokus hat)
-            "QListView::item:selected:!active {"
+            "QListView::item:selected:!active,"
+            "QListView::item:selected:!active:hover {"
             "    background-color: #505050;"
             "    color: white;"
             "}"
@@ -531,13 +567,17 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    padding-bottom: 0px;"
             "    height: 18px;"
             "}"
-            // Aktive Auswahl
-            "QListView::item:selected:active {"
+            "QListView::item:hover {"
+            "    background-color: #2e2e2e;"
+            "    color: #ffffff;"
+            "}"
+            "QListView::item:selected:active,"
+            "QListView::item:selected:active:hover {"
             "    background-color: #6b69d6;"
             "    color: white;"
             "}"
-            // Inaktive Auswahl (wenn die InputBox den Fokus hat)
-            "QListView::item:selected:!active {"
+            "QListView::item:selected:!active,"
+            "QListView::item:selected:!active:hover {"
             "    background-color: #505050;"
             "    color: white;"
             "}"
@@ -740,7 +780,11 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     connect(m_actionListViewPasteFiles, &QAction::triggered, this, &MainWindow::action_ListViewPasteFiles);
 
     m_actionListViewNewFolder = new QAction(tr("Folder"),this);
+#if defined(Q_OS_WIN)
+    m_actionListViewNewFolder->setIcon(QIcon(m_iconProvider.icon(QFileIconProvider::Folder).pixmap(16, 16)));
+#else
     m_actionListViewNewFolder->setIcon(QIcon::fromTheme("folder-new"));
+#endif
     m_actionListViewNewFolder->setShortcut(QKeySequence("Ctrl+N"));
     m_actionListViewNewFolder->setShortcutContext(Qt::WidgetShortcut);
     m_tableView->addAction(m_actionListViewNewFolder);
@@ -749,11 +793,38 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     connect(m_actionListViewNewFolder, &QAction::triggered, this, &MainWindow::action_ListViewNewFolder);
 
     m_actionListViewNewTextFile = new QAction(tr("Text File"),this);
+#if defined(Q_OS_WIN)
+    QFileInfo dummyInfo("any_filename.txt");
+    m_actionListViewNewTextFile->setIcon(QIcon(m_iconProvider.icon(dummyInfo).pixmap(16, 16)));
+#else
     m_actionListViewNewTextFile->setIcon(QIcon::fromTheme("folder-new"));
+#endif
     m_actionListViewNewTextFile->setShortcutContext(Qt::WidgetShortcut);
     connect(m_actionListViewNewTextFile, &QAction::triggered, this, &MainWindow::action_ListViewNewTextFile);
 
+    m_actionViewModeList = new QAction(tr("List"),this);
+    m_actionViewModeList->setShortcut(QKeySequence("Ctrl+1"));
+    m_actionViewModeList->setShortcutContext(Qt::WindowShortcut);
+    m_tableView->addAction(m_actionViewModeList);
+    m_listView->addAction(m_actionViewModeList);
+    m_thumbnailView->addAction(m_actionViewModeList);
+    connect(m_actionViewModeList, &QAction::triggered, this, &MainWindow::action_ViewModeList);
 
+    m_actionViewModeDetails = new QAction(tr("Details"),this);
+    m_actionViewModeDetails->setShortcut(QKeySequence("Ctrl+2"));
+    m_actionViewModeDetails->setShortcutContext(Qt::WindowShortcut);
+    m_tableView->addAction(m_actionViewModeDetails);
+    m_listView->addAction(m_actionViewModeDetails);
+    m_thumbnailView->addAction(m_actionViewModeDetails);
+    connect(m_actionViewModeDetails, &QAction::triggered, this, &MainWindow::action_ViewModeDetails);
+
+    m_actionViewModeThumbs = new QAction(tr("Thumbnails"),this);
+    m_actionViewModeThumbs->setShortcut(QKeySequence("Ctrl+3"));
+    m_actionViewModeThumbs->setShortcutContext(Qt::WindowShortcut);
+    m_tableView->addAction(m_actionViewModeThumbs);
+    m_listView->addAction(m_actionViewModeThumbs);
+    m_thumbnailView->addAction(m_actionViewModeThumbs);
+    connect(m_actionViewModeThumbs, &QAction::triggered, this, &MainWindow::action_ViewModeThumbs);
 
     if (m_settings.showIconsInMenu == false) {
         m_actionListViewOpenFiles->setIconVisibleInMenu(false);
@@ -765,8 +836,11 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
         m_actionListViewRenameFiles->setIconVisibleInMenu(false);
         m_actionListViewFileProperties->setIconVisibleInMenu(false);
         m_actionListViewPasteFiles->setIconVisibleInMenu(false);
-        m_actionListViewNewFolder->setIconVisibleInMenu(false);
-        m_actionListViewNewTextFile->setIconVisibleInMenu(false);
+        //m_actionListViewNewFolder->setIconVisibleInMenu(false);
+        //m_actionListViewNewTextFile->setIconVisibleInMenu(false);
+        m_actionViewModeList->setIconVisibleInMenu(false);
+        m_actionViewModeDetails->setIconVisibleInMenu(false);
+        m_actionViewModeThumbs->setIconVisibleInMenu(false);
     }
 
     if (m_settings.showShortcutsInMenu == false) {
@@ -781,6 +855,9 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
         m_actionListViewPasteFiles->setShortcutVisibleInContextMenu(false);
         m_actionListViewNewFolder->setShortcutVisibleInContextMenu(false);
         m_actionListViewNewTextFile->setShortcutVisibleInContextMenu(false);
+        m_actionViewModeList->setShortcutVisibleInContextMenu(false);
+        m_actionViewModeDetails->setShortcutVisibleInContextMenu(false);
+        m_actionViewModeThumbs->setShortcutVisibleInContextMenu(false);
     }
 
     // --------------------------------------------------------------------
@@ -840,6 +917,8 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     }
 
     browseFolder(showDir, focusPath);
+
+    //qDebug() << "Unterstützte Formate:" << QImageReader::supportedImageFormats();
 }
 
 MainWindow::~MainWindow() = default;
@@ -1106,11 +1185,26 @@ void MainWindow::onShowContextMenu(QAbstractItemView *senderView, const QPoint &
     QMenu mainMenu(this);
 
     if (filePath.isEmpty()) {
+        QMenu *subMenuView = mainMenu.addMenu(tr("View"));
+        subMenuView->addAction(m_actionViewModeList);
+        subMenuView->addAction(m_actionViewModeDetails);
+        subMenuView->addAction(m_actionViewModeThumbs);
+
+        mainMenu.addSeparator(); //-----------------------------------------
+
         mainMenu.addAction(m_actionListViewPasteFiles);
+        const QMimeData *mimeData = QApplication::clipboard()->mimeData();
+        bool canPaste = (mimeData && mimeData->hasUrls());
+        m_actionListViewPasteFiles->setEnabled(canPaste);
+
         mainMenu.addSeparator();
+
         QMenu *subMenuNew = mainMenu.addMenu(tr("New"));
         subMenuNew->addAction(m_actionListViewNewFolder);
         subMenuNew->addAction(m_actionListViewNewTextFile);
+
+        mainMenu.addSeparator(); //-----------------------------------------
+        mainMenu.addAction(m_actionListViewFileProperties);
     } else {
         mainMenu.addAction(m_actionListViewOpenFiles);
         mainMenu.setDefaultAction(m_actionListViewOpenFiles);
@@ -1485,7 +1579,7 @@ void MainWindow::action_ListViewRenameFiles() {
 void MainWindow::action_ListViewFileProperties() {
     QStringList pathList = getActiveViewPathList();
     if (pathList.isEmpty()) {
-        return;
+        pathList = { m_currentDirectory };
     }
 
     //auto *dialog = new FilePropertiesDialog(pathList, this);
@@ -1540,55 +1634,60 @@ void MainWindow::action_ListViewPasteFiles() {
 }
 
 void MainWindow::onFilesDropped(const QList<QUrl> &urlList, const QString &targetDir, Qt::DropAction dropAction, bool fromClipboard) {
-#ifdef Q_OS_WIN
-    // 1. Alle Quellpfade in das von Windows erwartete Format bringen (\0-getrennt)
-    std::wstring fromPaths;
-    for (const QUrl &url : std::as_const(urlList)) {
-        QString localFile = url.toLocalFile();
-        if (!localFile.isEmpty()) {
-            // WICHTIG: Qt-Slashes (/) in Windows-Backslashes (\) umwandeln!
-            QString nativePath = QDir::toNativeSeparators(localFile);
-            fromPaths += nativePath.toStdWString();
-            fromPaths += L'\0'; // Trenner zwischen den Dateien
-        }
-    }
+    if (urlList.isEmpty()) return;
 
-    if (fromPaths.empty()) {
+    QFileInfo firstFile(urlList.first().toLocalFile());
+    if (firstFile.absolutePath() == targetDir && dropAction == Qt::MoveAction) {
         return;
     }
-    fromPaths += L'\0'; // Das zweite finale \0, um das Ende der Liste zu markieren
 
-    // 2. Zielordner vorbereiten (muss ebenfalls mit \0\0 enden)
-    QString nativeTargetDir = QDir::toNativeSeparators(targetDir);
-    std::wstring toPath = nativeTargetDir.toStdWString() + L'\0' + L'\0';
+    if (dropAction == Qt::LinkAction) {
+        for (const QUrl &url : urlList) {
+            if (!url.isLocalFile()) continue;
 
-    // 3. SHFILEOPSTRUCT für Windows konfigurieren
-    SHFILEOPSTRUCTW fileOp = {0};
+            QString targetPath = url.toLocalFile();
+            QFileInfo targetInfo(targetPath);
 
-    // Bindet den Windows-Dialog modal an dein Qt-Hauptfenster
-    fileOp.hwnd = reinterpret_cast<HWND>(this->winId());
+            QString baseName = targetInfo.completeBaseName();
+            QString ext = targetInfo.suffix();
+            QString dotExt = ext.isEmpty() ? "" : "." + ext;
 
-    // Funktion festlegen: FO_COPY (Kopieren) oder FO_MOVE (Ausschneiden)
-    if (dropAction == Qt::MoveAction)
-        fileOp.wFunc = FO_MOVE;
-    else
-        fileOp.wFunc = FO_COPY;
+            QString linkFileName = targetInfo.fileName();
 
-    fileOp.pFrom = fromPaths.c_str();                    // Die Quell-Liste
-    fileOp.pTo = toPath.c_str();                         // Der Ziel-Ordner
+#if defined(Q_OS_WIN)
+            // Windows-Spezifisch: Eine Shell-Verknüpfung MUSS zwingend auf .lnk enden
+            if (!linkFileName.endsWith(".lnk", Qt::CaseInsensitive)) {
+                linkFileName += ".lnk";
+            }
+#endif
+            QDir dir(targetDir);
+            QString fullLinkPath = dir.filePath(linkFileName);
 
-    // Flags: ALLOWUNDO erlaubt Strg+Z im Explorer, NOCONFIRMMKDIR erstellt den Zielordner falls nötig lautlos
-    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR;
+            if (QFile::exists(fullLinkPath)) {
+                int counter = 1;
+                while (QFile::exists(fullLinkPath)) {
+#if defined(Q_OS_WIN)
+                    // Erzeugt z.B. "datei (1).txt.lnk" oder "ordner (1).lnk"
+                    QString numberedName = QString("%1 (%2)%3.lnk").arg(baseName).arg(counter).arg(dotExt);
+#else
+                    // Erzeugt z.B. "datei (1).txt" oder "ordner (1)" (Symlink unter Linux)
+                    QString numberedName = QString("%1 (%2)%3").arg(baseName).arg(counter).arg(dotExt);
+#endif
+                    fullLinkPath = dir.filePath(numberedName);
+                    counter++;
+                }
+            }
 
-    // Ausführung. (Windows übernimmt ab hier und blockiert, bis der Vorgang beendet ist)
-    int result = SHFileOperationW(&fileOp);
-
-    if (result == 0 && !fileOp.fAnyOperationsAborted) {
-        if (fromClipboard && dropAction == Qt::MoveAction) {
-            QApplication::clipboard()->clear();
+            if (QFile::link(targetPath, fullLinkPath)) {
+                qDebug() << "Symlink created:" << fullLinkPath << "->Target->" << targetPath;
+            } else {
+                qCritical() << "Symlink creation failed:" << targetPath;
+            }
         }
+
+        return;
     }
-#elif defined(Q_OS_LINUX)
+
     auto *op = new FileOperation(urlList, targetDir, dropAction);
     auto *thread = new QThread(this);
 
@@ -1606,28 +1705,139 @@ void MainWindow::onFilesDropped(const QList<QUrl> &urlList, const QString &targe
     });
 
     connect(op, &FileOperation::conflictDetected, this,
-            [this, op](const FileConflict &conflict) {
+            [this, op](const Conflict &conflict) {
 
-                QMessageBox::StandardButton btn = QMessageBox::question(this,
-                    QObject::tr("File already exists"),
-                    QObject::tr("'%1' already exists in the target folder. Overwrite?").arg(conflict.targetPath),
-                    QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+                QFileInfo fileInfoTarget(conflict.targetPath);
+                QFileInfo fileInfoSource(conflict.sourcePath);
 
-                ConflictResolution res;
-                if (btn == QMessageBox::Yes) {
-                    res = ConflictResolution::Overwrite;
-                } else if (btn == QMessageBox::No) {
-                    res = ConflictResolution::Skip;
+                quint32 crc = calculateCRC32(conflict.sourcePath);
+                QString crcSource = QString("%1").arg(crc, 8, 16, QChar('0')).toUpper();
+                crc = calculateCRC32(conflict.targetPath);
+                QString crcTarget = QString("%1").arg(crc, 8, 16, QChar('0')).toUpper();
+
+                const bool isDir = fileInfoTarget.isDir();
+
+                QString sTitle;
+                QString sText;
+                QString actionWord;
+
+                if (isDir) {
+                    sTitle = tr("Folder already exists");
+                    actionWord = tr("Merge");
                 } else {
-                    res = ConflictResolution::Cancel;  // Escape, X-Button, etc.
+                    sTitle = tr("File already exists");
+                    actionWord = tr("Overwrite");
                 }
 
-                op->resolveConflict(res);
+                sText = QString(tr("%1").arg(QDir::toNativeSeparators(conflict.targetPath)));
+
+                QMessageBox msgBox(this);
+                msgBox.setWindowTitle(sTitle);
+                //msgBox.setIcon(QMessageBox::Warning);
+
+                QString fileName = fileInfoTarget.fileName();
+                QString size = formatAdaptiveSize(fileInfoTarget.size());
+                QString lastModified = fileInfoTarget.lastModified().toString("yyyy-MM-dd  HH:mm:ss");
+
+                QFileIconProvider provider;
+                QIcon icon = provider.icon(fileInfoTarget);
+                QPixmap pix = icon.pixmap(QSize(48, 48));
+                QList mySize = icon.availableSizes();
+
+                QByteArray ba;
+                QBuffer bu(&ba);
+                pix.save(&bu, "PNG");
+                QString imgBase64 = ba.toBase64();
+
+                msgBox.setText(QString("<h3>%1</h3>").arg(sText));
+
+                const QString htmlTemplate = QStringLiteral(R"(
+                    <table width='100%' cellspacing='0' cellpadding='0'>
+                        <tr>
+                            <td rowspan='6' width='48' valign='top' style='padding-right: 10px;'>
+                                <img src='data:image/png;base64,%1'>
+                            </td>
+                            <td style='color: #FF0000; padding: 2px 8px; text-align: right;' width='1%'>%2</td>
+                            <td style='color: #FF0000; padding: 2px 8px;'>%3</td>
+                        </tr>
+                        <tr>
+                            <td style='color: #0000FF; padding: 2px 8px; text-align: right;'>%4</td>
+                            <td style='color: #0000FF; padding: 2px 8px;'>%5</td>
+                        </tr>
+                        <tr>
+                            <td style='color: #FF0000; padding: 10px 8px 2px 8px; text-align: right;'>%6</td>
+                            <td style='color: #FF0000; padding: 10px 8px 2px 8px;'>%7</td>
+                        </tr>
+                        <tr>
+                            <td style='color: #0000FF; padding: 2px 8px; text-align: right;'>%8</td>
+                            <td style='color: #0000FF; padding: 2px 8px;'>%9</td>
+                        </tr>
+                        <tr>
+                            <td style='color: #FF0000; padding: 10px 8px 2px 8px; text-align: right;'>%10</td>
+                            <td style='color: #FF0000; padding: 10px 8px 2px 8px;'>0x%11</td>
+                        </tr>
+                        <tr>
+                            <td style='color: #0000FF; padding: 2px 8px; text-align: right;'>%12</td>
+                            <td style='color: #0000FF; padding: 2px 8px;'>0x%13</td>
+                        </tr>
+                    </table>
+                    )");
+
+
+                msgBox.setInformativeText(htmlTemplate.arg(
+                    imgBase64,
+
+                    tr("Source:"),
+                    formatAdaptiveSize(fileInfoSource.size()),
+                    tr("Target:"),
+                    formatAdaptiveSize(fileInfoTarget.size()),
+
+                    tr("Source:"),
+                    fileInfoSource.lastModified().toString("yyyy-MM-dd  HH:mm:ss"),
+                    tr("Target:"),
+                    fileInfoTarget.lastModified().toString("yyyy-MM-dd  HH:mm:ss"),
+
+                    tr("Source:"),
+                    crcSource,
+                    tr("Target:"),
+                    crcTarget
+                    ));
+
+                QPushButton *btnOverwrite    = msgBox.addButton(actionWord,              QMessageBox::AcceptRole);
+                QPushButton *btnOverwriteAll = msgBox.addButton(actionWord + tr(" all"), QMessageBox::AcceptRole);
+                QPushButton *btnSkip         = msgBox.addButton(tr("Skip"),              QMessageBox::RejectRole);
+                QPushButton *btnSkipAll      = msgBox.addButton(tr("Skip all"),          QMessageBox::RejectRole);
+                QPushButton *btnCancel       = msgBox.addButton(tr("Cancel"),            QMessageBox::DestructiveRole);
+
+                msgBox.setDefaultButton(btnOverwrite);
+                btnOverwrite->setStyleSheet("QPushButton { font-weight: bold; min-width: 80px; }");
+
+                msgBox.exec();
+
+                auto *clicked = msgBox.clickedButton();
+                ConflictResolution res;
+                bool applyToAll = false;
+
+                if (clicked == btnOverwrite) {
+                    res = ConflictResolution::Overwrite;
+                } else if (clicked == btnOverwriteAll) {
+                    res = ConflictResolution::Overwrite;
+                    applyToAll = true;
+                } else if (clicked == btnSkip) {
+                    res = ConflictResolution::Skip;
+                } else if (clicked == btnSkipAll) {
+                    res = ConflictResolution::Skip;
+                    applyToAll = true;
+                } else {
+                    // Cancel, Escape, X-Button
+                    res = ConflictResolution::Cancel;
+                }
+
+                op->resolveConflict(res, applyToAll);
 
             }, Qt::QueuedConnection);
 
     thread->start();
-#endif
 }
 
 void MainWindow::action_ListViewNewFolder() {
@@ -1738,6 +1948,18 @@ void MainWindow::action_ListViewNewTextFile() {
     }
 }
 
+void MainWindow::action_ViewModeList() {
+    setViewMode(0);
+}
+
+void MainWindow::action_ViewModeDetails() {
+    setViewMode(1);
+}
+
+void MainWindow::action_ViewModeThumbs() {
+    setViewMode(2);
+}
+
 void MainWindow::action_EditSettingsFile() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(m_settings.getSettingsPath()));
 }
@@ -1829,7 +2051,6 @@ void MainWindow::onTimedUpdateIcons() {
             bool isImage = (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "bmp" || ext == "gif" || ext == "webp" || ext == "jxl");
 
             if (isImage) {
-                // Unser schneller Image-Reader aus Schritt 3
                 QPixmap thumb = generateThumbnail(fullPath);
                 if (!thumb.isNull()) {
                     m_abstractModel->addPathThumbnail(fullPath, thumb, sourceIndex.row());
@@ -1841,7 +2062,33 @@ void MainWindow::onTimedUpdateIcons() {
             // Fallback: Wenn es kein Bild ist (z.B. ein Ordner oder eine PDF),
             // nutze wie gewohnt den QFileIconProvider
             QIcon trueIcon = m_iconProvider.icon(fileInfo);
+#ifdef Q_OS_WIN
+            QPixmap icon48 = trueIcon.pixmap(48, 48);
+            QPixmap canvas(96, 96);
+            canvas.fill(Qt::transparent);
+
+            {
+                QPainter painter(&canvas);
+
+                int x = (canvas.width() - icon48.width()) / 2;  // (96 - 48) / 2 = 24
+                int y = (canvas.height() - icon48.height()) / 2; // (96 - 48) / 2 = 24
+                painter.drawPixmap(x, y, icon48);
+
+                painter.setPen(QColor(255, 255, 255, 27));
+
+                // WICHTIGE QT-BESONDERHEIT:
+                // In Qt zeichnet drawRect(x, y, w, h) bei einem 1px-Stift historisch bedingt
+                // ein Rechteck, das w+1 Pixel breit und h+1 Pixel hoch ist.
+                // Damit der Rand exakt auf den Pixeln 0 bis 95 liegt, müssen wir -1 rechnen.
+                painter.drawRect(0, 0, canvas.width() - 1, canvas.height() - 1);
+
+                // Der Painter wird am Ende des Scopes {} automatisch geschlossen und gespeichert
+            }
+
+            m_abstractModel->addPathThumbnail(fullPath, canvas, sourceIndex.row());
+#elif defined(Q_OS_LINUX)
             m_abstractModel->addPathThumbnail(fullPath, trueIcon.pixmap(96, 96), sourceIndex.row());
+#endif
             iconsProcessedInThisBatch++;
         }
         else {
@@ -2002,6 +2249,20 @@ void MainWindow::setViewMode(int index) {
     if (m_viewStack->currentWidget() == m_tableView) {
         m_tableView->setSortingEnabled(true);
         updateColumns();
+
+        QItemSelectionModel *selectionModel = m_tableView->selectionModel();
+        if (selectionModel && selectionModel->hasSelection()) {
+            QModelIndexList currentSel = selectionModel->selectedIndexes();
+
+            QItemSelection rowSelection;
+            for (const QModelIndex &idx : std::as_const(currentSel)) {
+                if (idx.column() == 0) {
+                    rowSelection.select(idx, idx);
+                }
+            }
+
+            selectionModel->select(rowSelection, QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
     } else {
         m_tableView->setSortingEnabled(false);
     }
@@ -2051,6 +2312,8 @@ bool MainWindow::showDeleteConfirmationDialog(const QStringList &pathList, bool 
         QFileIconProvider provider;
         QIcon icon = provider.icon(fileInfo);
         QPixmap pix = icon.pixmap(QSize(48, 48));
+        QList mySize = icon.availableSizes();
+        qDebug() << "showDeleteConfirmationDialog() mySize:" << mySize;
 
         QByteArray ba;
         QBuffer bu(&ba);
@@ -2058,7 +2321,41 @@ bool MainWindow::showDeleteConfirmationDialog(const QStringList &pathList, bool 
         QString imgBase64 = ba.toBase64();
 
         msgBox.setText(QString("<h3>%1</h3>").arg(sText));
-        msgBox.setInformativeText(QString(tr("<table width='100%' cellspacing='0' cellpadding='0'><tr><td rowspan=4 width='48' valign='top' style='padding-right: 10px;'><img src='data:image/png;base64,%1'></td><td style='color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;' width='1%'>Name:</td><td style='color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;'>%2</td></tr><tr><td style='color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;'>Size:</td><td style='color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;'>%3</td></tr><tr><td style='color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;'>Date:</td><td style='color: #555; padding-top: 2px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;'>%4</td></tr><tr><td colspan=2 style='padding-top: 8px; padding-bottom: 2px; padding-left: 8px; padding-right: 8px;'>%5</td></tr></table>")).arg(imgBase64, fileName, size, lastModified, sWarning));
+
+        const QString htmlTemplate = QStringLiteral(R"(
+            <table width='100%' cellspacing='0' cellpadding='0'>
+                <tr>
+                    <td rowspan='4' width='48' valign='top' style='padding-right: 10px;'>
+                        <img src='data:image/png;base64,%1'>
+                    </td>
+                    <td style='color: #555; padding: 2px 8px;' width='1%'>%2</td>
+                    <td style='color: #555; padding: 2px 8px;'>%3</td>
+                </tr>
+                <tr>
+                    <td style='color: #555; padding: 2px 8px;'>%4</td>
+                    <td style='color: #555; padding: 2px 8px;'>%5</td>
+                </tr>
+                <tr>
+                    <td style='color: #555; padding: 2px 8px;'>%6</td>
+                    <td style='color: #555; padding: 2px 8px;'>%7</td>
+                </tr>
+                <tr>
+                    <td colspan='2' style='padding: 8px 8px 2px 8px;'>%8</td>
+                </tr>
+            </table>
+            )");
+
+
+        msgBox.setInformativeText(htmlTemplate.arg(
+            imgBase64,
+            tr("Name:"),
+            fileName,
+            tr("Size:"),
+            size,
+            tr("Date:"),
+            lastModified,
+            sWarning
+            ));
     } else {
         msgBox.setText(QString("<h3>%1</h3>").arg(sText));
         msgBox.setInformativeText(sWarning);
@@ -2201,19 +2498,27 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             m_timerUpdateIcons->start(20);
         }
     }
-    else if (event->type() == QEvent::MouseButtonPress) {
+    else if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick) {
         if (obj == m_listView->viewport() || obj == m_tableView->viewport() || obj == m_thumbnailView->viewport()) {
             auto *mouseEvent = static_cast<QMouseEvent*>(event);
 
-            if (mouseEvent->button() == Qt::RightButton && !m_settings.menuOnMouseUp) {
+            if (mouseEvent->button() == Qt::RightButton) {
                 auto *targetView = qobject_cast<QAbstractItemView*>(obj->parent());
-
                 QPoint pos = mouseEvent->pos();
-                // Use Lambda to trigger menu after button event has finished processing
-                // This is a workaround. Calling onShowContextMenu() directly would block the default funtion of focusing the item below the mouse cursor.
-                QTimer::singleShot(0, this, [this, targetView, pos]() {
-                    onShowContextMenu(targetView, pos);
-                });
+
+                if (targetView) {
+                    if (!targetView->indexAt(pos).isValid()) {
+                        targetView->clearSelection();
+                    }
+                }
+
+                if (!m_settings.menuOnMouseUp) {
+                    // Use Lambda to trigger menu after button event has finished processing
+                    // This is a workaround. Calling onShowContextMenu() directly would block the default function of focusing the item below the mouse cursor.
+                    QTimer::singleShot(0, this, [this, targetView, pos]() {
+                        onShowContextMenu(targetView, pos);
+                    });
+                }
 
                 return false;
             }
@@ -2245,16 +2550,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         }
         // global CTRL+ keys that work independent of active control
         else if (keyEvent->modifiers() == Qt::ControlModifier) {
-            if (keyEvent->key() == Qt::Key_1) {
-                setViewMode(0);
-                return true;
-            } else if (keyEvent->key() == Qt::Key_2) {
-                setViewMode(1);
-                return true;
-            } else if (keyEvent->key() == Qt::Key_3) {
-                setViewMode(2);
-                return true;
-            } else if (keyEvent->key() == Qt::Key_D) {
+            if (keyEvent->key() == Qt::Key_D) {
                 QString appPath = QCoreApplication::applicationFilePath();
                 QStringList arguments;
                 arguments << "-X" << QString::number(this->x() + 40)

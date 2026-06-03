@@ -1,5 +1,5 @@
 #include "filesortproxymodel.h"
-#include "custommodel.h"
+#include "customtablemodel.h"
 
 bool FileSortProxyModel::lessThan(const QModelIndex &source_left, const QModelIndex &source_right) const {
     auto *model = qobject_cast<CustomTableModel*>(sourceModel());

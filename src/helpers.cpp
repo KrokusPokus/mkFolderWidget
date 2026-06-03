@@ -315,6 +315,90 @@ bool onSameStorageDevice(const QString &pathA, const QString &pathB) {
            (storageA == storageB);
 }
 
+void createInternetShortcut(const QString &urlStr, const QString &targetDir, const QString &webTitle) {
+    // 1. Basis-Dateinamen bestimmen (Trimmen entfernt führende/nachstehende Leerzeichen)
+    QString fileName = webTitle.trimmed();
+
+    // Fallback A: Wenn data->text() leer war, nutzen wir die Domain (z.B. "www.wikipedia.org")
+    if (fileName.isEmpty()) {
+        QUrl url(urlStr);
+        fileName = url.host();
+    }
+
+    // Fallback B: Wenn auch die Domain fehlschlägt (z.B. ungültige URL), generischer Name
+    if (fileName.isEmpty()) {
+        fileName = "Internet-Link";
+    }
+
+    // 2. Dateinamen bereinigen (Sanitize)
+    // Ersetzt alle im Windows/Linux/macOS-Dateisystem verbotenen Zeichen durch einen Unterstrich: \ / : * ? " < > |
+    fileName.replace(QRegularExpression("[\\\\/:*?\"<>|]"), "_");
+    fileName = fileName.trimmed();
+
+    // Sicherheitsprüfung: Falls nach der Bereinigung nichts mehr übrig ist
+    if (fileName.isEmpty()) {
+        fileName = "Internet-Link";
+    }
+
+    // --- NEU: Plattformabhängige Dateiendung festlegen ---
+    QString extension = ".url";
+#if defined(Q_OS_LINUX)
+    extension = ".desktop";
+#endif
+
+    if (!fileName.endsWith(extension, Qt::CaseInsensitive)) {
+        fileName += extension;
+    }
+
+    // 3. Zielverzeichnis prüfen
+    QDir dir(targetDir);
+    if (!dir.exists()) {
+        qWarning() << "Zielverzeichnis existiert nicht:" << targetDir;
+        return;
+    }
+
+    // 4. Kollisionsschutz: Falls die Datei schon existiert, eine Nummerierung anhängen
+    // REPARATUR: QFileInfo nutzen statt hartem chop(4), da ".desktop" 8 Zeichen lang ist!
+    QString fullPath = dir.filePath(fileName);
+    QFileInfo fileInfo(fileName);
+    QString baseName = fileInfo.completeBaseName();
+    QString finalAnzeigename = baseName; // Merken für das 'Name=' Feld unter Linux
+
+    if (QFile::exists(fullPath)) {
+        int counter = 1;
+        while (QFile::exists(fullPath)) {
+            finalAnzeigename = QString("%1 (%2)").arg(baseName).arg(counter);
+            QString numberedName = finalAnzeigename + extension;
+            fullPath = dir.filePath(numberedName);
+            counter++;
+        }
+    }
+
+    // 5. Die Datei schreiben
+    QFile file(fullPath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+
+#ifdef Q_OS_WIN
+        // Windows .url Format
+        out << "[InternetShortcut]\n";
+        out << "URL=" << urlStr << "\n";
+#elif defined(Q_OS_LINUX)
+        // Linux .desktop Format für Web-Links
+        out << "[Desktop Entry]\n";
+        out << "Version=1.0\n";
+        out << "Type=Link\n";
+        out << "Name=" << finalAnzeigename << "\n"; // Das ist der Text, den Linux anzeigt
+        out << "URL=" << urlStr << "\n";
+        out << "Icon=text-html\n";                  // Standard-Icon für HTML/Web-Links
+#endif
+
+        file.close();
+    } else {
+        qCritical() << "Fehler beim Erstellen der Verknüpfung:" << file.errorString();
+    }
+}
+
 bool isCurrentProcessElevated() {
 #ifdef Q_OS_WIN
     HANDLE hProcess = GetCurrentProcess();

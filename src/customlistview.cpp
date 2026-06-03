@@ -1,7 +1,17 @@
 #include "customlistview.h"
+#include "customtablemodel.h"
+#include "helpers.h"
+
+#include <QAbstractProxyModel>
 #include <QDrag>
 #include <QMenu>
 #include <QMimeData>
+#include <QPainter>
+
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#include <shellapi.h>   // needed for ExtractIconW() and DestroyIcon()
+#endif
 
 CustomListView::CustomListView(QWidget *parent)
     : QListView(parent)
@@ -14,8 +24,11 @@ void CustomListView::startDrag(Qt::DropActions supportedActions) {
     // 1. Prüfen, ob die rechte Maustaste gedrückt ist, während der Drag startet
     bool isRightClick = (QGuiApplication::mouseButtons() & Qt::RightButton);
 
+    QModelIndexList indexes = selectedIndexes();
+    if (indexes.isEmpty()) return;
+
     // 2. Standard-MimeData vom Model für die ausgewählten Elemente generieren lassen
-    QMimeData *mimeData = model()->mimeData(selectedIndexes());
+    QMimeData *mimeData = model()->mimeData(indexes);
     if (!mimeData) return;
 
     // 3. Wenn es ein Rechtsklick-Drag ist, flaggen wir das Objekt temporär
@@ -26,52 +39,101 @@ void CustomListView::startDrag(Qt::DropActions supportedActions) {
     QDrag *drag = new QDrag(this);
     drag->setMimeData(mimeData);
 
-    // Optional: Hier könntest du noch ein passendes Drag-Bild (Pixmap) setzen
-    // drag->setPixmap(...);
-    qDebug() << "startDrag() isRightClick:" << isRightClick;
-    // 4. Drag ausführen und explizit alle drei Aktionen erlauben
-    if (isRightClick) {
-        drag->exec(supportedActions | Qt::CopyAction | Qt::MoveAction | Qt::LinkAction);
+    // --- Drag image generation ---
+
+    QIcon dragIcon;
+    if (indexes.count() > 1) {
+#if defined(Q_OS_WIN)
+        HICON hIcon = ExtractIconW(GetModuleHandle(nullptr), L"shell32.dll", -133);
+        if (hIcon) {
+            QImage img = QImage::fromHICON(hIcon);
+            dragIcon = QIcon(QPixmap::fromImage(img));
+            DestroyIcon(hIcon);
+        }
+#else
+        dragIcon = QIcon::fromTheme("document-multiple");
+#endif
     } else {
-        drag->exec(supportedActions | Qt::CopyAction | Qt::MoveAction);
+        dragIcon = model()->data(indexes.first(), Qt::DecorationRole).value<QIcon>();
     }
+
+    if (!dragIcon.isNull()) {
+        QPixmap pm = dragIcon.pixmap(32, 32);
+
+        // --- NEU: 50% Transparenz anwenden ---
+        // 1. Eine neue, leere Pixmap mit transparentem Hintergrund erstellen
+        QPixmap transparentPm(pm.size());
+        transparentPm.fill(Qt::transparent);
+
+        // 2. QPainter auf der neuen Pixmap starten
+        QPainter painter(&transparentPm);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        // 3. Deckkraft auf 50% (0.5) setzen und das Original hineinzeichnen
+        painter.setOpacity(0.5);
+        painter.drawPixmap(0, 0, pm);
+        painter.end(); // Maler schließen, um die Pixmap freizugeben
+
+        // 4. Die transparente Pixmap an den Drag übergeben
+        drag->setPixmap(transparentPm);
+        drag->setHotSpot(QPoint(transparentPm.width() / 2, transparentPm.height() / 2));
+    }
+
+    drag->exec(supportedActions | Qt::CopyAction | Qt::MoveAction | Qt::LinkAction);
+}
+
+void CustomListView::dragEnterEvent(QDragEnterEvent *event) {
+    m_targetDirPrevious.clear();
+    m_isSameFolderCached = false;
+    m_isSameDriveCached = false;
+
+    QAbstractItemView::dragEnterEvent(event);
+    updateTargetCache(event->position().toPoint(), event->mimeData());
+    event->setDropAction(resolveDropAction(event->modifiers()));
+    event->accept();
 }
 
 void CustomListView::dragMoveEvent(QDragMoveEvent *event) {
-    QModelIndex index = indexAt(event->position().toPoint());
-    if (!index.isValid()) { // empty background area
-        // Wenn die Quelle aus uns selbst stammt (interner Drag), verbieten wir es SOFORT
-        if (event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist") && event->dropAction() == Qt::MoveAction) {
-            event->ignore();
-            return;
-        }
+
+    // Mitigation for Qt bug: send event with fake coordinates to clear the hover indicator
+    if (interceptInvalidFileTarget(event, false)) {
+        return;
     }
 
-    QListView::dragMoveEvent(event);
+    QAbstractItemView::dragMoveEvent(event);
 
-    // Override the DropAction chosen by the default handler
-    if (event->isAccepted()) {
-        if (event->modifiers() & Qt::ControlModifier) {
-            event->setDropAction(Qt::CopyAction);
-        } else {
-            event->setDropAction(Qt::MoveAction);
-        }
-        event->accept();
-    }
+    if (!event->isAccepted()) return;
+
+    updateTargetCache(event->position().toPoint(), event->mimeData());
+    event->setDropAction(resolveDropAction(event->modifiers()));
+    event->accept();
 }
 
 void CustomListView::dropEvent(QDropEvent *event) {
-    bool isRightClick = event->mimeData()->hasFormat("application/x-rightclickdrag");
-    qDebug() << "dropEvent() isRightClick:" << isRightClick;
-    if (isRightClick) {
-        QMenu menu(this);
-        QAction *actCopy = menu.addAction(tr("Copy here"));
-        QAction *actMove = menu.addAction(tr("Move here"));
-        QAction *actLink = menu.addAction(tr("Link here"));
-        menu.addSeparator();
-        menu.addAction(tr("Cancel"));
 
-        menu.setDefaultAction(actMove);
+    updateTargetCache(event->position().toPoint(), event->mimeData());
+
+    if (event->mimeData()->hasFormat("application/x-rightclickdrag")) {
+        QMenu menu(this);
+
+        QAction *actCopy = new QAction(tr("Copy here"), &menu);
+        QAction *actMove = new QAction(tr("Move here"), &menu);
+        QAction *actLink = new QAction(tr("Link here"), &menu);
+        QAction *actCancel = new QAction(tr("Cancel"), &menu);
+
+        menu.addAction(actCopy);
+        if (!m_isSameFolderCached) {
+            menu.addAction(actMove);
+        }
+        menu.addAction(actLink);
+        menu.addSeparator();
+        menu.addAction(actCancel);
+
+        if (m_isSameFolderCached || !m_isSameDriveCached) {
+            menu.setDefaultAction(actCopy);
+        } else {
+            menu.setDefaultAction(actMove);
+        }
 
         QAction *selectedAction = menu.exec(mapToGlobal(event->position().toPoint()));
 
@@ -86,14 +148,10 @@ void CustomListView::dropEvent(QDropEvent *event) {
             return;
         }
     } else {
-        if (event->modifiers() & Qt::ControlModifier) {
-            event->setDropAction(Qt::CopyAction);
-        } else {
-            event->setDropAction(Qt::MoveAction);
-        }
+        event->setDropAction(resolveDropAction(event->modifiers()));
     }
 
-    QListView::dropEvent(event);
+    QAbstractItemView::dropEvent(event);
 }
 
 bool CustomListView::edit(const QModelIndex &index, EditTrigger trigger, QEvent *event) {
@@ -166,4 +224,91 @@ void CustomListView::setSelection(const QRect &rect, QItemSelectionModel::Select
     if (selectionModel()) {
         selectionModel()->select(linearSelection, command);
     }
+}
+
+bool CustomListView::interceptInvalidFileTarget(QDragMoveEvent *event, bool isEnterEvent) {
+    // 1. Index unter der echten Mausposition ermitteln und entpacken
+    QModelIndex index = indexAt(event->position().toPoint());
+    QAbstractItemModel *currentModel = model();
+    while (auto proxy = qobject_cast<QAbstractProxyModel*>(currentModel)) {
+        index = proxy->mapToSource(index);
+        currentModel = proxy->sourceModel();
+    }
+    auto *customModel = qobject_cast<CustomTableModel*>(currentModel);
+
+    // 2. Prüfen, ob wir auf einer Datei (ungültiges Ziel) stehen
+    if (customModel && index.isValid()) {
+        QString itemPath = customModel->filePath(index);
+        if (!itemPath.isEmpty() && !QFileInfo(itemPath).isDir()) {
+
+            // 3. Trick anwenden: Fake-Event mit (-1, -1) an die korrekte Basis-Funktion senden
+            if (isEnterEvent) {
+                QDragEnterEvent fakeEvent(QPoint(-1, -1), event->possibleActions(), event->mimeData(), event->buttons(), event->modifiers());
+                QAbstractItemView::dragEnterEvent(&fakeEvent);
+            } else {
+                QDragMoveEvent fakeEvent(QPoint(-1, -1), event->possibleActions(), event->mimeData(), event->buttons(), event->modifiers());
+                QAbstractItemView::dragMoveEvent(&fakeEvent);
+            }
+
+            // Dem Betriebssystem signalisieren: Drop hier verboten!
+            event->ignore();
+            return true; // Event erfolgreich abgefangen
+        }
+    }
+
+    return false; // Kein Datei-Target, normaler Ablauf erforderlich
+}
+
+void CustomListView::updateTargetCache(const QPoint &pos, const QMimeData *mimeData) {
+    // 1. Visuellen Index holen und durch Proxy-Kette entpacken
+    QModelIndex sourceIndex = indexAt(pos);
+    QAbstractItemModel *currentModel = model();
+    while (auto proxy = qobject_cast<QAbstractProxyModel*>(currentModel)) {
+        sourceIndex = proxy->mapToSource(sourceIndex);
+        currentModel = proxy->sourceModel();
+    }
+
+    auto *tableModel = qobject_cast<CustomTableModel*>(currentModel);
+    if (!tableModel) return;
+
+    // 2. Zielverzeichnis ermitteln
+    QString currentTargetDir = tableModel->currentDirectoryPath();
+    if (sourceIndex.isValid() && dropIndicatorPosition() == QAbstractItemView::OnItem) {
+        QString itemPath = tableModel->filePath(sourceIndex);
+        if (!itemPath.isEmpty() && QFileInfo(itemPath).isDir()) {
+            currentTargetDir = itemPath;
+        }
+    }
+
+    // 3. Wenn sich der Ordner geändert hat: Cache neu berechnen
+    if (currentTargetDir != m_targetDirPrevious) {
+        m_targetDirPrevious = currentTargetDir;
+        m_isSameFolderCached = false;
+        m_isSameDriveCached = false;
+
+        if (mimeData && mimeData->hasUrls()) {
+            QList<QUrl> urls = mimeData->urls();
+            if (!urls.isEmpty()) {
+                QFileInfo firstFile(urls.first().toLocalFile());
+
+                if (firstFile.absolutePath() == currentTargetDir) {
+                    m_isSameFolderCached = true;
+                }
+                m_isSameDriveCached = onSameStorageDevice(firstFile.absolutePath(), currentTargetDir);
+            }
+        }
+    }
+}
+
+Qt::DropAction CustomListView::resolveDropAction(Qt::KeyboardModifiers mods) const {
+    if (m_isSameFolderCached || !m_isSameDriveCached) {
+        return Qt::CopyAction;
+    }
+    if (((mods & Qt::ControlModifier) && (mods & Qt::ShiftModifier)) || (mods & Qt::AltModifier)) {
+        return Qt::LinkAction;
+    }
+    if (mods & Qt::ControlModifier) {
+        return Qt::CopyAction;
+    }
+    return Qt::MoveAction;
 }

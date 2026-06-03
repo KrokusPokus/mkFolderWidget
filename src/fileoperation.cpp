@@ -31,9 +31,14 @@ void FileOperation::run() {
 
         QString src = items.at(i);
         QFileInfo srcInfo(src);
-        QString dst = QDir(m_targetDir).filePath(srcInfo.fileName());
+        QString dst;
 
-        //bool isCrossDevice = !isOnSameDevice(src, dst);
+        // MoveAction into same folder blocked in MainWindow::onFilesDropped(), so we don't need to do anything special here
+        if (srcInfo.absolutePath() == m_targetDir) {
+            dst = generateUniqueCopyName(srcInfo, m_targetDir);
+        } else {
+            dst = QDir(m_targetDir).filePath(srcInfo.fileName());
+        }
 
         FileOpResult result;
         if (srcInfo.isDir())
@@ -54,25 +59,34 @@ void FileOperation::run() {
 
 FileOpResult FileOperation::copyOrMoveFile(const QString &src, const QString &dst, bool isCrossDevice) {
     if (QFile::exists(dst)) {
-        FileConflict conflict{ src, dst };
+        if (m_applyToAll) {
+            // Kein Dialog – gespeicherte Entscheidung direkt anwenden
+            switch (m_applyToAllResolution) {
+                case ConflictResolution::Skip:     return FileOpResult::Skipped;
+                case ConflictResolution::Cancel:   return FileOpResult::Cancelled;
+                case ConflictResolution::Overwrite: QFile::remove(dst); break;
+            }
+        } else {
+            Conflict conflict{ src, dst };
 
-        m_pendingResolution = ConflictResolution::Skip;
-        emit conflictDetected(conflict);    // GUI-Thread verarbeitet das via QueuedConnection
-        m_semaphore.acquire();              // wartet
+            m_pendingResolution = ConflictResolution::Skip;
+            emit conflictDetected(conflict);    // GUI-Thread verarbeitet das via QueuedConnection
+            m_semaphore.acquire();              // wartet
 
-        // GUI-Thread schreibt m_pendingResolution via resolveConflict()
-        // Kein Mutex nötig: m_semaphore.acquire() fungiert als Memory-Barrier,
-        // die garantiert dass resolveConflict() vollständig abgeschlossen ist
-        // bevor wir m_pendingResolution lesen.
+            // GUI-Thread schreibt m_pendingResolution via resolveConflict()
+            // Kein Mutex nötig: m_semaphore.acquire() fungiert als Memory-Barrier,
+            // die garantiert dass resolveConflict() vollständig abgeschlossen ist
+            // bevor wir m_pendingResolution lesen.
 
-        switch (m_pendingResolution) {
-        case ConflictResolution::Skip:
-            return FileOpResult::Skipped;
-        case ConflictResolution::Cancel:
-            return FileOpResult::Cancelled;
-        case ConflictResolution::Overwrite:
-            QFile::remove(dst);
-            break;
+            switch (m_pendingResolution) {
+                case ConflictResolution::Skip:
+                    return FileOpResult::Skipped;
+                case ConflictResolution::Cancel:
+                    return FileOpResult::Cancelled;
+                case ConflictResolution::Overwrite:
+                    QFile::remove(dst);
+                    break;
+            }
         }
     }
 
@@ -110,7 +124,37 @@ FileOpResult FileOperation::copyOrMoveDir(const QString &src, const QString &dst
     }
 
     QDir dstDir(dst);
-    if (!dstDir.exists()) {
+    if (dstDir.exists()) {
+        // Konflikt: Zielordner existiert bereits → nachfragen
+        if (m_applyToAll) {
+            // Kein Dialog – gespeicherte Entscheidung direkt anwenden
+            switch (m_applyToAllResolution) {
+                case ConflictResolution::Skip:     return FileOpResult::Skipped;
+                case ConflictResolution::Cancel:   return FileOpResult::Cancelled;
+                case ConflictResolution::Overwrite: break;
+            }
+        } else {
+            Conflict conflict{ src, dst };
+
+            m_pendingResolution = ConflictResolution::Skip;
+            emit conflictDetected(conflict);    // GUI-Thread verarbeitet das via QueuedConnection
+            m_semaphore.acquire();              // wartet
+
+            // GUI-Thread schreibt m_pendingResolution via resolveConflict()
+            // Kein Mutex nötig: m_semaphore.acquire() fungiert als Memory-Barrier,
+            // die garantiert dass resolveConflict() vollständig abgeschlossen ist
+            // bevor wir m_pendingResolution lesen.
+
+            switch (m_pendingResolution) {
+                case ConflictResolution::Skip:
+                    return FileOpResult::Skipped;
+                case ConflictResolution::Cancel:
+                    return FileOpResult::Cancelled;
+                case ConflictResolution::Overwrite: // = "Zusammenführen"
+                    break; // weiter mit Rekursion
+            }
+        }
+    } else {
         if (!QDir().mkpath(dst))
             return FileOpResult::Error;
     }
@@ -142,8 +186,9 @@ FileOpResult FileOperation::copyOrMoveDir(const QString &src, const QString &dst
     return FileOpResult::Success;
 }
 
-void FileOperation::resolveConflict(ConflictResolution resolution) {
+void FileOperation::resolveConflict(ConflictResolution resolution, bool applyToAll) {
     m_pendingResolution = resolution;
+    m_applyToAll = applyToAll;
     m_semaphore.release();
 }
 
@@ -157,4 +202,23 @@ bool FileOperation::isOnSameDevice(const QString &src, const QString &dst) const
     return storageSrc.isValid() && storageSrc.isReady() &&
            storageDst.isValid() && storageDst.isReady() &&
            (storageSrc == storageDst);
+}
+
+QString FileOperation::generateUniqueCopyName(const QFileInfo &srcInfo, const QString &targetDir) {
+    QString base = srcInfo.completeBaseName();
+    QString ext = srcInfo.suffix();
+    if (!ext.isEmpty()) {
+        ext = "." + ext;
+    }
+
+    int counter = 1;
+    QString newPath;
+
+    do {
+        QString suffix = (counter == 1) ? tr(" (Copy)") : QString(tr(" (Copy %1)")).arg(counter);
+        newPath = QDir(targetDir).filePath(base + suffix + ext);
+        counter++;
+    } while (QFile::exists(newPath));
+
+    return newPath;
 }

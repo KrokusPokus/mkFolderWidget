@@ -2,7 +2,7 @@
 #define MAINWINDOW_H
 
 #include "customlistview.h"
-#include "custommodel.h"
+#include "customtablemodel.h"
 #include "customtableview.h"
 #include "settingsmanager.h"
 #include "filesortproxymodel.h"
@@ -22,6 +22,7 @@
 #include <QMainWindow>
 #include <QPainter>             // Added for cut item opacity drawing
 #include <QPointer>
+#include <QProxyStyle>
 #include <QQueue>
 #include <QSet>
 #include <QSortFilterProxyModel>
@@ -29,22 +30,58 @@
 #include <QStyledItemDelegate>  // Added for cut item opacity drawing
 #include <QTableView>
 #include <QTableWidget>
+#include <QTextLayout>
 #include <QTimer>
 #include <QVBoxLayout>
 
+class CustomDropIndicatorStyle : public QProxyStyle {
+public:
+    // Konstruktor reicht den aktuellen System-Style durch
+    explicit CustomDropIndicatorStyle(QStyle *style = nullptr) : QProxyStyle(style) {}
+
+    void drawPrimitive(PrimitiveElement element, const QStyleOption *option,
+                       QPainter *painter, const QWidget *widget = nullptr) const override
+    {
+        // Wir fangen exakt den "ItemView Drop-Indikator" ab
+        if (element == QStyle::PE_IndicatorItemViewItemDrop) {
+            if (option->rect.isNull()) return;
+
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing);
+
+            // Definiere deine Wunschfarbe (z.B. ein modernes Windows- oder KDE-Blau)
+            QColor dropAccentColor(0, 120, 215); // #0078d7
+
+            // Heuristik: Ist das Rechteck sehr flach, ist es eine Linie ZWISCHEN Items
+            if (option->rect.height() <= 2) {
+                QPen pen(dropAccentColor, 3); // Schöne, 3 Pixel dicke Linie
+                painter->setPen(pen);
+                painter->drawLine(option->rect.topLeft(), option->rect.topRight());
+            }
+            // Andernfalls ist es ein Kasten UM ein Item (z.B. Hover über einem Ordner)
+            else {
+                QPen pen(dropAccentColor, 2, Qt::SolidLine);
+                painter->setPen(pen);
+
+                // Ein leicht abgerundeter Rahmen sieht moderner aus
+                QRect targetRect = option->rect.adjusted(1, 1, -1, -1);
+                painter->drawRoundedRect(targetRect, 4, 4);
+
+                // Das Innere des Ordners zart blau glühen lassen
+                painter->fillRect(targetRect, QColor(0, 120, 215, 35)); // Alpha 35 = sehr dezent
+            }
+
+            painter->restore();
+            return; // Wichtig: Hier abbrechen, damit das Stylesheet es nicht überschreibt!
+        }
+
+        // Alle anderen Standard-Elemente (Scrollbars, Header, etc.) normal zeichnen
+        QProxyStyle::drawPrimitive(element, option, painter, widget);
+    }
+};
 
 class ListItemDelegate : public QStyledItemDelegate {
     Q_OBJECT
-protected:
-    void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
-        QStyledItemDelegate::initStyleOption(option, index);
-
-        if (index.data(CustomTableModel::UseRedTextRole).toBool()) {
-            static const QColor exeRed(255, 74, 70);
-            option->palette.setColor(QPalette::Text, exeRed);
-            option->palette.setColor(QPalette::HighlightedText, exeRed);
-        }
-    }
 
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
@@ -54,8 +91,6 @@ public:
         bool isHidden = index.data(CustomTableModel::IsHiddenRole).toBool();
 
         QStyleOptionViewItem opt = option;
-        opt.decorationPosition = QStyleOptionViewItem::Left;
-        opt.displayAlignment = Qt::AlignLeft | Qt::AlignVCenter;
 
         /*
         // Eigenen Selektions- und Fokus-Hintergrund zeichnen
@@ -105,19 +140,62 @@ public:
         }
     }
 
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-        QStyleOptionViewItem opt = option;
-        opt.decorationPosition = QStyleOptionViewItem::Left;
-        return QStyledItemDelegate::sizeHint(opt, index);
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override {
+        QStyledItemDelegate::setEditorData(editor, index);
+
+        if (QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor)) {
+            QString text = lineEdit->text();
+
+            int lastDot = text.lastIndexOf('.');
+            bool isDir = index.data(CustomTableModel::IsDirectoryRole).toBool();
+
+            if (!isDir && lastDot > 0) {
+                QTimer::singleShot(0, lineEdit, [lineEdit, lastDot]() {
+                    lineEdit->setSelection(0, lastDot);
+                });
+            } else {
+                lineEdit->selectAll();
+            }
+        }
     }
 
-    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option,  const QModelIndex &index) const override {
-        QStyleOptionViewItem opt = option;
+protected:
+    void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
+        QStyledItemDelegate::initStyleOption(option, index);
 
-        opt.decorationPosition = QStyleOptionViewItem::Left;
-        opt.displayAlignment = Qt::AlignLeft | Qt::AlignVCenter;
+        option->decorationPosition = QStyleOptionViewItem::Left;
+        option->displayAlignment = Qt::AlignLeft | Qt::AlignVCenter;
 
-        QStyledItemDelegate::updateEditorGeometry(editor, opt, index);
+        if (index.data(CustomTableModel::UseRedTextRole).toBool()) {
+            static const QColor exeRed(255, 74, 70);
+            option->palette.setColor(QPalette::Text, exeRed);
+            option->palette.setColor(QPalette::HighlightedText, exeRed);
+        }
+    }
+};
+
+class TableItemDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        bool isCut = index.data(CustomTableModel::IsCutRole).toBool();
+        bool isHidden = index.data(CustomTableModel::IsHiddenRole).toBool();
+
+        if (isCut || isHidden) {
+            painter->save();
+            if (isCut && isHidden) {
+                painter->setOpacity(0.25);
+            } else {
+                painter->setOpacity(0.50);
+            }
+            QStyledItemDelegate::paint(painter, option, index);
+            painter->restore();
+        } else {
+            QStyledItemDelegate::paint(painter, option, index);
+        }
     }
 
     void setEditorData(QWidget *editor, const QModelIndex &index) const override {
@@ -138,10 +216,7 @@ public:
             }
         }
     }
-};
 
-class TableItemDelegate : public QStyledItemDelegate {
-    Q_OBJECT
 protected:
     void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
         QStyledItemDelegate::initStyleOption(option, index);
@@ -150,68 +225,16 @@ protected:
             static const QColor exeRed(255, 74, 70);
             option->palette.setColor(QPalette::Text, exeRed);
             option->palette.setColor(QPalette::HighlightedText, exeRed);
-        }
-    }
-
-public:
-    using QStyledItemDelegate::QStyledItemDelegate;
-
-    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-        bool isCut = index.data(CustomTableModel::IsCutRole).toBool();
-        bool isHidden = index.data(CustomTableModel::IsHiddenRole).toBool();
-
-        if (isCut || isHidden) {
-            painter->save();
-            if (isCut && isHidden) {
-                painter->setOpacity(0.25);
-            } else {
-                painter->setOpacity(0.50);
-            }
-            QStyledItemDelegate::paint(painter, option, index);
-            painter->restore();
-        } else {
-            QStyledItemDelegate::paint(painter, option, index);
         }
     }
 };
 
 class ThumbItemDelegate : public QStyledItemDelegate {
     Q_OBJECT
-protected:
-    void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
-        QStyledItemDelegate::initStyleOption(option, index);
-
-        option->displayAlignment = Qt::AlignHCenter | Qt::AlignBottom;
-
-        if (index.data(CustomTableModel::UseRedTextRole).toBool()) {
-            static const QColor exeRed(255, 74, 70);
-            option->palette.setColor(QPalette::Text, exeRed);
-            option->palette.setColor(QPalette::HighlightedText, exeRed);
-        }
-    }
 
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
-/*
-    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
 
-        bool isCut = index.data(CustomTableModel::IsCutRole).toBool();
-        bool isHidden = index.data(CustomTableModel::IsHiddenRole).toBool();
-
-        if (isCut || isHidden) {
-            painter->save();
-            if (isCut && isHidden) {
-                painter->setOpacity(0.25);
-            } else {
-                painter->setOpacity(0.50);
-            }
-            QStyledItemDelegate::paint(painter, option, index);
-            painter->restore();
-        } else {
-            QStyledItemDelegate::paint(painter, option, index);
-        }
-    }
-*/
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
         // Feste Icon-Box berechnen (Nutzt die 96px aus der View)
         int iconBoxSize = option.decorationSize.isValid() ? option.decorationSize.height() : 96;
@@ -240,7 +263,6 @@ public:
         style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, opt.widget);
 
         QRect itemRect = opt.rect;
-        qDebug() << "itemRect.left()" << itemRect.left() << "itemRect.top()" << itemRect.top() << "itemRect.right()" << itemRect.right() << "itemRect.bottom()" << itemRect.bottom();
 
         QRect iconBoxRect(itemRect.left() + (itemRect.width() - iconBoxSize) / 2,
                           itemRect.top(),
@@ -262,7 +284,7 @@ public:
         if (!opt.text.isEmpty()) {
             painter->setFont(opt.font);
 
-            // Textfarbe anhand des Selektionsstatus ermitteln
+            // Textfarbe ermitteln
             QPalette::ColorGroup cg = (opt.state & QStyle::State_Enabled) ? QPalette::Normal : QPalette::Disabled;
             if (opt.state & QStyle::State_Selected) {
                 painter->setPen(opt.palette.color(cg, QPalette::HighlightedText));
@@ -270,37 +292,104 @@ public:
                 painter->setPen(opt.palette.color(cg, QPalette::Text));
             }
 
-            QString elidedText = opt.fontMetrics.elidedText(
-                opt.text,
-                Qt::ElideMiddle,  // Kürzen am Ende (z.B. "SehrLangerName...")
-                elideRect.width() // Verfügbare Breite im Widget
-                );
+            // =====================================================================
+            // NEU: Intelligenter Umbruch (Wortgrenze ODER überall)
+            // =====================================================================
+            QTextOption textOption;
+            textOption.setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+            textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
 
-            painter->drawText(elideRect, opt.displayAlignment, elidedText);
+            // Wichtig: Überladung mit QRectF und QTextOption nutzen!
+            painter->drawText(QRectF(elideRect), opt.text, textOption);
         }
 
         painter->restore();
     }
 
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
-        // 1. Basis-Größe vom Standard-Kalkulator holen
-        QSize size = QStyledItemDelegate::sizeHint(option, index);
+        // 1. Icon-Box bestimmen
+        int iconBoxSize = option.decorationSize.isValid() ? option.decorationSize.height() : 96;
+        if (iconBoxSize <= 0) iconBoxSize = 96;
 
-        // 2. Mindesthöhe berechnen: Icon-Höhe (decorationSize) + Text-Höhe + Padding
-        // option.decorationSize enthält die 96px, die du im View gesetzt hast
-        int minHeight = option.decorationSize.height() + option.fontMetrics.height() + 8;
+        int targetWidth = 104; // Deine Spaltenbreite
+        int textPadding = 8;   // 4px links, 4px rechts
+        int availableTextWidth = targetWidth - textPadding;
 
-        // 3. Falls Qt (z.B. im Hintergrund) fälschlicherweise eine zu kleine Höhe berechnet
-        if (size.height() < minHeight) {
-            size.setHeight(minHeight);
+        // 2. Text holen
+        QString text = index.data(Qt::DisplayRole).toString();
+
+        // =====================================================================
+        // NEU: Hochpräzise Höhenberechnung via QTextLayout mit Smart-Wrap
+        // =====================================================================
+        int textHeight = 0;
+        if (!text.isEmpty()) {
+            QTextLayout layout(text, option.font);
+
+            QTextOption textOption;
+            textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+            layout.setTextOption(textOption);
+
+            layout.beginLayout();
+            double y = 0;
+            while (true) {
+                QTextLine line = layout.createLine();
+                if (!line.isValid())
+                    break;
+
+                line.setLineWidth(availableTextWidth);
+                line.setPosition(QPointF(0, y));
+                y += line.height();
+            }
+            layout.endLayout();
+
+            // Die Gesamthöhe des Textblocks auslesen (aufgerundet auf ganze Pixel)
+            textHeight = static_cast<int>(qCeil(layout.boundingRect().height()));
         }
 
-        // Sicherstellen, dass auch die Breite dem Grid entspricht
-        if (size.width() < 120) {
-            size.setWidth(120);
-        }
+        // 3. Gesamthöhe = Icon-Box + Abstand + gemessene Texthöhe + Puffer unten
+        int calculatedHeight = iconBoxSize + 4 + textHeight + 4;
 
-        return size;
+        return QSize(targetWidth, calculatedHeight);
+    }
+
+    QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+        if (auto *lineEdit = qobject_cast<QLineEdit*>(editor)) {
+            lineEdit->setAlignment(Qt::AlignCenter);
+        }
+        return editor;
+    }
+
+    void setEditorData(QWidget *editor, const QModelIndex &index) const override {
+        QStyledItemDelegate::setEditorData(editor, index);
+
+        if (QLineEdit *lineEdit = qobject_cast<QLineEdit*>(editor)) {
+            QString text = lineEdit->text();
+
+            int lastDot = text.lastIndexOf('.');
+            bool isDir = index.data(CustomTableModel::IsDirectoryRole).toBool();
+
+            if (!isDir && lastDot > 0) {
+                QTimer::singleShot(0, lineEdit, [lineEdit, lastDot]() {
+                    lineEdit->setSelection(0, lastDot);
+                });
+            } else {
+                lineEdit->selectAll();
+            }
+        }
+    }
+
+protected:
+    void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
+        QStyledItemDelegate::initStyleOption(option, index);
+
+        option->displayAlignment = Qt::AlignHCenter | Qt::AlignBottom;
+
+        if (index.data(CustomTableModel::UseRedTextRole).toBool()) {
+            static const QColor exeRed(255, 74, 70);
+            option->palette.setColor(QPalette::Text, exeRed);
+            option->palette.setColor(QPalette::HighlightedText, exeRed);
+        }
     }
 };
 
@@ -355,6 +444,9 @@ private:
     void action_ListViewRenameFiles();
     void action_ListViewNewFolder();
     void action_ListViewNewTextFile();
+    void action_ViewModeList();
+    void action_ViewModeDetails();
+    void action_ViewModeThumbs();
     void browseFolder(QString directoryPath, const QString &focusPath = QString(), bool isHistoryNavigation = false);
     void loadMimeCache();
     void navigateUp();
@@ -393,7 +485,9 @@ private:
     QAction *m_actionListViewPasteFiles = nullptr;
     QAction *m_actionListViewNewFolder = nullptr;
     QAction *m_actionListViewNewTextFile = nullptr;
-    QThread *m_workerThread = nullptr;
+    QAction *m_actionViewModeList = nullptr;
+    QAction *m_actionViewModeDetails = nullptr;
+    QAction *m_actionViewModeThumbs = nullptr;
     QTimer *m_timerUpdateIcons = nullptr;
 
     QFileSystemWatcher* m_fileSystemWatcher = nullptr;

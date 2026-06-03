@@ -1,5 +1,5 @@
-#ifndef CUSTOMMODEL_H
-#define CUSTOMMODEL_H
+#ifndef CUSTOMTABLEMODEL_H
+#define CUSTOMTABLEMODEL_H
 
 #include <QAbstractTableModel>
 #include <QDateTime>
@@ -75,6 +75,7 @@ public:
     void setCutMarkers(const QStringList &absolutePaths);
     void clearCutMarkers();
     bool isDirectory(int row) const;
+    const QString &currentDirectoryPath() const { return m_currentDirectoryPath; }
 
     void setThumbnailMode(bool enabled) {
         m_thumbnailMode = enabled;
@@ -95,4 +96,4 @@ private:
 
 
 
-#endif // CUSTOMMODEL_H
+#endif // CUSTOMTABLEMODEL_H

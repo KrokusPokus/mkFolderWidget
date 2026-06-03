@@ -1,4 +1,4 @@
-#include "custommodel.h"
+#include "customtablemodel.h"
 #include "helpers.h"
 
 #include <QDirIterator>
@@ -166,7 +166,7 @@ QVariant CustomTableModel::headerData(int section, Qt::Orientation orientation, 
 
 Qt::ItemFlags CustomTableModel::flags(const QModelIndex &index) const {
     if (!index.isValid()) {                             // No index -> no item -> background!
-        return Qt::NoItemFlags| Qt::ItemIsDropEnabled;  // Background needs to have Qt::ItemIsDropEnabled to become a valid drop target.
+        return Qt::NoItemFlags | Qt::ItemIsDropEnabled;  // Background needs to have Qt::ItemIsDropEnabled to become a valid drop target.
     }
 
     // Die Standard-Flags holen (Selectable, Enabled)
@@ -175,7 +175,7 @@ Qt::ItemFlags CustomTableModel::flags(const QModelIndex &index) const {
     if (index.column() == 0) {
         cellFlags |= Qt::ItemIsEditable | Qt::ItemIsDragEnabled;
 
-        // Nur Ordner dürfen als Drop-Ziel dienen (um Dateien REINzuschieben)
+        // Nur Ordner dürfen als Drop-Ziel dienen
         int row = index.row();
         if (row >= 0 && row < static_cast<int>(m_files.size())) {
             if (m_files[row].isDir) {
@@ -271,7 +271,11 @@ void CustomTableModel::loadDirectory(const QString &dirPath) {
         CustomFileInfo info;
         info.name = fileInfo.fileName();
         info.isDir = fileInfo.isDir();
+#ifdef Q_OS_WIN
+        info.isHidden = fileInfo.isHidden() || info.name.startsWith('.');
+#else
         info.isHidden = fileInfo.isHidden();
+#endif
         info.size = info.isDir ? 0 : fileInfo.size();
         info.date = fileInfo.lastModified();
         info.iconIndex = 0;
@@ -383,11 +387,11 @@ bool CustomTableModel::isDirectory(int row) const {
 }
 
 Qt::DropActions CustomTableModel::supportedDragActions() const {
-    return Qt::CopyAction | Qt::MoveAction;
+    return Qt::CopyAction | Qt::MoveAction | Qt::LinkAction;
 }
 
 Qt::DropActions CustomTableModel::supportedDropActions() const {
-    return Qt::CopyAction | Qt::MoveAction| Qt::LinkAction;
+    return Qt::CopyAction | Qt::MoveAction | Qt::LinkAction;
 }
 
 QStringList CustomTableModel::mimeTypes() const {
@@ -427,20 +431,15 @@ bool CustomTableModel::canDropMimeData(const QMimeData *data, Qt::DropAction act
         return false;
     }
 
+    // Drop "zwischen" Items verbieten!
+    // Wenn row != -1 ist, schwebt die Maus an den Rändern eines Items (oberhalb/unterhalb).
+    // Durch das 'false' blendet Qt die Einfüge-Linie aus und wechselt sofort in den "OnItem"-Modus.
+    if (row != -1) {
+        return false;
+    }
+
     // FALL 1: Die Maus schwebt über dem leeren Hintergrund (parent ist ungültig)
     if (!parent.isValid()) {
-        QList<QUrl> urls = data->urls();
-        if (!urls.isEmpty()) {
-            // Wir prüfen den Pfad der ersten Datei, die gezogen wird
-            QFileInfo firstFile(urls.first().toLocalFile());
-
-            // Wenn der Ursprungsordner der Datei identisch mit unserem aktuellen Ordner ist:
-            if (firstFile.absolutePath() == m_currentDirectoryPath) {
-                return false;   // Zeigt den "Nicht-Möglich"-Mauszeiger
-            }
-        }
-        // Falls die Dateien von AUßERHALB (anderer Ordner / Desktop) kommen,
-        // erlauben wir den Drop auf den Hintergrund natürlich!
         return true;
     }
 
@@ -473,13 +472,56 @@ bool CustomTableModel::canDropMimeData(const QMimeData *data, Qt::DropAction act
             }
         }
     }
-
     return QAbstractTableModel::canDropMimeData(data, action, row, column, parent);
 }
 
 bool CustomTableModel::dropMimeData(const QMimeData *data, Qt::DropAction action, int row, int column, const QModelIndex &parent) {
     Q_UNUSED(row);
     Q_UNUSED(column);
+/*
+    // --- DEBUG-BLOCK START ---
+    if (data) {
+        qDebug() << "\n========== QMimeData INSIGHT ==========";
+        qDebug() << "Verfügbare Formate:" << data->formats();
+
+        for (const QString &format : data->formats()) {
+            QByteArray rawData = data->data(format);
+            qDebug() << "---------------------------------------";
+            qDebug() << "MIME-Type:" << format;
+            qDebug() << "Größe:    " << rawData.size() << "Bytes";
+
+            // Spezialbehandlung für URLs (sehr nützlich bei Browser-Dnd)
+            if (format == "text/uri-list" && data->hasUrls()) {
+                qDebug() << "Inhalt (als URLs interpretiert):";
+                for (const QUrl &url : data->urls()) {
+                    qDebug() << "  -> URL:" << url.toString()
+                    << "[Lokale Datei?" << (url.isLocalFile() ? "JA" : "NEIN") << "]";
+                }
+            }
+            // Reine Text-Formate lesbar als String ausgeben
+            else if (format.startsWith("text/") || format.contains("string") || format.contains("text")) {
+                // Konvertiert die Rohdaten von UTF-8 in einen lesbaren QString
+                QString textContent = QString::fromUtf8(rawData);
+                // Zeilenumbrüche für die Ausgabe etwas einrücken
+                textContent.replace("\n", "\n  ");
+                qDebug() << "Inhalt (Text):\n  " << textContent;
+            }
+            // Binäre oder Qt-interne Formate als Hex-Vorschau anzeigen
+            else {
+                // Wir zeigen nur die ersten 64 Bytes an, damit das Terminal nicht geflutet wird
+                QByteArray preview = rawData.left(64);
+                qDebug() << "Inhalt (Hex-Vorschau):\n  " << preview.toHex(' ');
+                if (rawData.size() > 64) {
+                    qDebug() << "  ... (" << (rawData.size() - 64) << "weitere Bytes)";
+                }
+            }
+        }
+        qDebug() << "=======================================\n";
+    } else {
+        qDebug() << "dropMimeData aufgerufen, aber QMimeData ist NULL!";
+    }
+    // --- DEBUG-BLOCK ENDE ---
+*/
 
     if (action == Qt::IgnoreAction) return true;
     if (!data || !data->hasUrls()) return false;
@@ -495,6 +537,47 @@ bool CustomTableModel::dropMimeData(const QMimeData *data, Qt::DropAction action
             QDir dir(m_currentDirectoryPath);
             targetDir = dir.filePath(m_files[parentRow].name);
         }
+    }
+
+    QList<QUrl> urlList = data->urls();
+    if (!urlList.first().isLocalFile()) {
+        for (const QUrl &url : data->urls()) {
+            if (!url.isLocalFile()) {
+                QString webUrlStr = url.toString();
+
+                QString webTitle = "";
+
+                if (data->hasFormat("text/x-moz-url-desc")) {
+                    QByteArray rawDesc = data->data("text/x-moz-url-desc");
+
+                    // Firefox liefert das unter Windows als UTF-16 (2 Bytes pro Zeichen).
+                    // Wir wandeln die Rohdaten explizit von UTF-16 in einen QString um:
+                    webTitle = QString::fromUtf16(
+                        reinterpret_cast<const char16_t*>(rawDesc.constData()),
+                        rawDesc.size() / 2
+                        );
+
+                    // Da Windows-Strings oft mit einem Null-Terminator '\0' enden,
+                    // schneiden wir diesen und eventuelle Leerzeichen ab.
+                    int nullPos = webTitle.indexOf(QChar('\0'));
+                    if (nullPos != -1) {
+                        webTitle = webTitle.left(nullPos);
+                    }
+                    webTitle = webTitle.trimmed();
+                }
+
+                // Fallback, falls es kein Firefox/Mozilla-Browser war oder das Feld fehlt
+                if (webTitle.isEmpty() && data->hasText()) {
+                    // Wenn es eine URL ist, extrahieren wir den Hostnamen, sonst nehmen wir den Text
+                    QUrl url(data->text());
+                    webTitle = url.isValid() && !url.isLocalFile() ? url.host() : data->text();
+                }
+
+                createInternetShortcut(webUrlStr, targetDir, webTitle);
+            }
+        }
+
+        return true;
     }
 
     emit filesDropped(data->urls(), targetDir, action);

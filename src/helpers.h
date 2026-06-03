@@ -27,6 +27,9 @@ QString getDisplayName(const QFileInfo &fileInfo, bool showFileExtensions);
 QString getDisplayName(const QString &filePath, bool isDir, bool showFileExtensions);
 QPixmap generateThumbnail(const QString &filePath);
 bool isCurrentProcessElevated();
+bool onSameStorageDevice(const QString &pathA, const QString &pathB);
+void createInternetShortcut(const QString &urlStr, const QString &targetDir, const QString &webTitle);
+
 #ifdef Q_OS_WIN
 bool startProcessElevatedWin(const QString &programPath, const QString &arguments);
 QString argumentsToWinString(const QStringList &args);

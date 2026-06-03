@@ -31,7 +31,7 @@ FilePropertiesDialog::FilePropertiesDialog(const QStringList &filePaths, QWidget
         fillSingleFileInfo(fileInfo);
         setWindowTitle(tr("Properties of %1").arg(fileInfo.fileName()));
     }
-    setWindowIcon(QIcon(":/icons/res/info.ico"));
+    setWindowIcon(QIcon(":/icons/info.ico"));
 }
 
 FilePropertiesDialog::~FilePropertiesDialog() {

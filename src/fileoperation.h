@@ -11,7 +11,7 @@
 
 enum class FileOpResult { Success, Skipped, Error, Cancelled};
 
-struct FileConflict {
+struct Conflict {
     QString sourcePath;
     QString targetPath;
 };
@@ -28,23 +28,26 @@ public:
 
 signals:
     void progress(int current, int total);
-    void conflictDetected(const FileConflict &conflict);  // blockierend via Qt::BlockingQueuedConnection
+    void conflictDetected(const Conflict &conflict);  // blockierend via Qt::BlockingQueuedConnection
     void finished(bool anyErrors);
 
 public slots:
     void run();
-    void resolveConflict(ConflictResolution resolution);
+    void resolveConflict(ConflictResolution resolution, bool applyToAll);
 
 private:
     FileOpResult copyOrMoveFile(const QString &src, const QString &dst, bool isCrossDevice);
     FileOpResult copyOrMoveDir(const QString &src, const QString &dst, bool isCrossDevice);
     bool isOnSameDevice(const QString &src, const QString &dst) const;
+    QString generateUniqueCopyName(const QFileInfo &srcInfo, const QString &targetDir);
 
     QList<QUrl>     m_urls;
     QString         m_targetDir;
     Qt::DropAction  m_action;
 
+    bool m_applyToAll = false;
     ConflictResolution m_pendingResolution;
+    ConflictResolution m_applyToAllResolution = ConflictResolution::Skip;
     QSemaphore m_semaphore;
 };
 
