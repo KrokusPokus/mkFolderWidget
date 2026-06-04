@@ -140,6 +140,24 @@ public:
         }
     }
 
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        QVariant cachedSize = index.data(CustomTableModel::ListViewSizeHintRole); // use precalculated value
+        if (cachedSize.isValid()) {
+            return cachedSize.toSize();
+        }
+        return QStyledItemDelegate::sizeHint(option, index); // fallback
+    }
+
+    // Wird aufgerufen, sobald die EditBox geöffnet wird (egal ob durch F2 oder Klick)
+    QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+        if (editor) {
+            // Da diese Qt-Methode 'const' ist, müssen wir das Signal über const_cast abfeuern
+            emit const_cast<ListItemDelegate*>(this)->editingStarted();
+        }
+        return editor;
+    }
+
     void setEditorData(QWidget *editor, const QModelIndex &index) const override {
         QStyledItemDelegate::setEditorData(editor, index);
 
@@ -158,6 +176,10 @@ public:
             }
         }
     }
+
+signals:
+    void editingStarted();
+    // Hinweis: Das Gegenstück 'closeEditor' erbt diese Klasse bereits automatisch von Qt!
 
 protected:
     void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
@@ -198,6 +220,16 @@ public:
         }
     }
 
+    // Wird aufgerufen, sobald die EditBox geöffnet wird (egal ob durch F2 oder Klick)
+    QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
+        QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+        if (editor) {
+            // Da diese Qt-Methode 'const' ist, müssen wir das Signal über const_cast abfeuern
+            emit const_cast<TableItemDelegate*>(this)->editingStarted();
+        }
+        return editor;
+    }
+
     void setEditorData(QWidget *editor, const QModelIndex &index) const override {
         QStyledItemDelegate::setEditorData(editor, index);
 
@@ -216,6 +248,10 @@ public:
             }
         }
     }
+
+signals:
+    void editingStarted();
+    // Hinweis: Das Gegenstück 'closeEditor' erbt diese Klasse bereits automatisch von Qt!
 
 protected:
     void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
@@ -354,6 +390,10 @@ public:
 
     QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override {
         QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+        if (editor) {
+            // Da diese Qt-Methode 'const' ist, müssen wir das Signal über const_cast abfeuern
+            emit const_cast<ThumbItemDelegate*>(this)->editingStarted();
+        }
         if (auto *lineEdit = qobject_cast<QLineEdit*>(editor)) {
             lineEdit->setAlignment(Qt::AlignCenter);
         }
@@ -378,6 +418,11 @@ public:
             }
         }
     }
+
+
+signals:
+    void editingStarted();
+    // Hinweis: Das Gegenstück 'closeEditor' erbt diese Klasse bereits automatisch von Qt!
 
 protected:
     void initStyleOption(QStyleOptionViewItem *option, const QModelIndex &index) const override {
@@ -417,6 +462,7 @@ private slots:
     void setViewMode(int index);
     void triggerDirectoryReload();
     void onFilterBoxChange(const QString &text);
+    void onTableCurrentChanged(const QModelIndex &current, const QModelIndex &previous);
 
 private:
     enum Column {
@@ -504,6 +550,8 @@ private:
     SettingsManager m_settings;
     QStringList m_backHistory;
     QStringList m_forwardHistory;
+    bool m_isEditingFile = false;
+    bool m_refreshPendingWhileEditing = false;
 
 #ifdef Q_OS_WIN
     QString getSendToPath();

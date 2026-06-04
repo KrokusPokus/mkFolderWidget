@@ -28,7 +28,6 @@ FilePropertiesDialog::FilePropertiesDialog(const QStringList &filePaths, QWidget
     } else {
         QFileInfo fileInfo(m_filePaths.first());
         setupUi(fileInfo);
-        fillSingleFileInfo(fileInfo);
         setWindowTitle(tr("Properties of %1").arg(fileInfo.fileName()));
     }
     setWindowIcon(QIcon(":/icons/info.ico"));
@@ -116,6 +115,12 @@ void FilePropertiesDialog::setupUiMultiMode() {
 }
 
 void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
+    bool isDrive = false;
+    QString absoluteFilePath = fileInfo.absoluteFilePath();
+#ifdef Q_OS_WIN
+    isDrive = (absoluteFilePath.length() == 3 && absoluteFilePath.at(1) == ':' && (absoluteFilePath.at(2) == '/' || absoluteFilePath.at(2) == '\\'));
+#endif
+
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
@@ -123,8 +128,30 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
     auto *headerLayout = new QHBoxLayout();
     headerLayout->setContentsMargins(30, 25, 30, 25);
     headerLayout->setSpacing(25);
+
     m_iconLabel = new QLabel();
-    m_nameEdit = new QLineEdit();
+    QFileIconProvider provider;
+    QIcon icon = provider.icon(fileInfo);
+    QPixmap pix = icon.pixmap(QSize(48, 48));
+    if (hasImageExt(fileInfo)) {
+        QPixmap thumb = generateThumbnail(absoluteFilePath);
+        if (!thumb.isNull()) {
+            pix = thumb;
+        }
+    }
+    m_iconLabel->setPixmap(pix);
+    QString itemName;
+    if (isDrive) {
+        QStorageInfo storageInfo(fileInfo.absoluteFilePath());
+        itemName = storageInfo.name();
+    } else {
+        itemName = fileInfo.fileName();
+    }
+    m_nameEdit = new QLineEdit(itemName);
+    m_nameEdit->setStyleSheet("QLineEdit { padding-left: 7px; padding-right: 7px; padding-top: 5px; padding-bottom: 5px;}");
+    int textWidth = m_nameEdit->fontMetrics().horizontalAdvance(m_nameEdit->text());
+    m_nameEdit->setMinimumWidth(textWidth + 22);
+
     headerLayout->addWidget(m_iconLabel);
     headerLayout->addWidget(m_nameEdit);
     mainLayout->addLayout(headerLayout);
@@ -137,25 +164,10 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
 
     //---------------------------------------------------------------------------------------------------------------------------------------------------------
     // fileinfo
-    m_typeLabel = new QLabel();
-    m_typeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_mimeLabel = new QLabel();
-    m_mimeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_pathEdit = new QLabel();
-    m_pathEdit->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_sizeLabel = new QLabel(tr("Calculating size..."));
-    m_sizeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_createdLabel = new QLabel();
-    m_createdLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_modifiedLabel = new QLabel();
-    m_modifiedLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_lastReadLabel = new QLabel();
-    m_lastReadLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-
 
     QGridLayout *fileinfoGridLayout = new QGridLayout();
 
-    fileinfoGridLayout->setContentsMargins(20, 10, 20, 10);
+    fileinfoGridLayout->setContentsMargins(20, 10, 20, 20);
     fileinfoGridLayout->setHorizontalSpacing(0);
     fileinfoGridLayout->setVerticalSpacing(10);
 
@@ -177,22 +189,52 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
 
     // ================= BLOCK 1 =================
     fileinfoGridLayout->addWidget(new QLabel(tr("Type:")), row, colLabel);
+    m_typeLabel = new QLabel();
+    m_typeLabel->setText(getFileType(fileInfo));
+    m_typeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     fileinfoGridLayout->addWidget(m_typeLabel, row, colField);
     row++;
 
-    fileinfoGridLayout->addWidget(new QLabel(tr("MimeType:")), row, colLabel);
-    fileinfoGridLayout->addWidget(m_mimeLabel, row, colField);
-    row++;
+    if (!isDrive) {
+        fileinfoGridLayout->addWidget(new QLabel(tr("MimeType:")), row, colLabel);
+        m_mimeLabel = new QLabel();
+        QMimeDatabase mimeDb;
+        QMimeType mime = mimeDb.mimeTypeForFile(absoluteFilePath);  // .mimeTypeForFile goes by file extension AND if neccessary by content (magic bytes)
+        m_mimeLabel->setText(mime.name());
+        m_mimeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        fileinfoGridLayout->addWidget(m_mimeLabel, row, colField);
+        row++;
+    }
 
     fileinfoGridLayout->addWidget(new QLabel(tr("Path:")), row, colLabel);
+    m_pathEdit = new QLabel();
+    m_pathEdit->setText(QDir::toNativeSeparators(fileInfo.absolutePath()));
+    m_pathEdit->setTextInteractionFlags(Qt::TextSelectableByMouse);
     fileinfoGridLayout->addWidget(m_pathEdit, row, colField);
     row++;
 
+
     fileinfoGridLayout->addWidget(new QLabel(tr("Size:")), row, colLabel);
+    m_sizeLabel = new QLabel();
+    if (isDrive) {
+        QStorageInfo storageInfo(fileInfo.absoluteFilePath());
+        qint64 free = storageInfo.bytesFree();
+        qint64 total = storageInfo.bytesTotal();
+        m_sizeLabel->setText(tr("%1 (%2 free)").arg(formatAdaptiveSize(total)).arg(formatAdaptiveSize(free)));
+    } else if (fileInfo.isDir()) {
+       m_sizeLabel->setText(tr("Calculating size..."));    // will be changed again by updateUiAsyncStart() later on
+    } else {
+        if (fileInfo.size() <= 1024) {
+            m_sizeLabel->setText(formatAdaptiveSize(fileInfo.size()));
+        } else {
+            m_sizeLabel->setText(tr("%1 (%2 Bytes)").arg(formatAdaptiveSize(fileInfo.size())).arg(m_locale.toString(fileInfo.size())));
+        }
+    }
+    m_sizeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     fileinfoGridLayout->addWidget(m_sizeLabel, row, colField);
     row++;
 
-    if (fileInfo.isDir()) {
+    if (fileInfo.isDir() && !isDrive) {
         m_containsLabel = new QLabel(tr("Calculating content..."));
         m_containsLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
         fileinfoGridLayout->addWidget(new QLabel(tr("Content:")), row, colLabel);
@@ -211,20 +253,31 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
         fileinfoGridLayout->addWidget(line5, row, colLeftMargin, 1, 5);
         row++;
 
-        m_linkTargetEdit = new QLineEdit();
-        m_linkArgumentsEdit = new QLineEdit();
-        m_linkWorkingDirectoryEdit = new QLineEdit();
 
         fileinfoGridLayout->addWidget(new QLabel(tr("Target:")), row, colLabel);
+        m_linkTargetEdit = new QLineEdit();
         fileinfoGridLayout->addWidget(m_linkTargetEdit, row, colField);
         row++;
 
         fileinfoGridLayout->addWidget(new QLabel(tr("Arguments:")), row, colLabel);
+        m_linkArgumentsEdit = new QLineEdit();
         fileinfoGridLayout->addWidget(m_linkArgumentsEdit, row, colField);
         row++;
 
         fileinfoGridLayout->addWidget(new QLabel(tr("WorkDir:")), row, colLabel);
+        m_linkWorkingDirectoryEdit = new QLineEdit();
         fileinfoGridLayout->addWidget(m_linkWorkingDirectoryEdit, row, colField);
+
+        WinShortcutDetails shortcutDetails;
+        if (getWindowsShortcutDetails(absoluteFilePath, shortcutDetails)) {
+            m_linkTargetEdit->setText(shortcutDetails.targetPath);
+            m_linkArgumentsEdit->setText(shortcutDetails.arguments);
+            m_linkWorkingDirectoryEdit->setText(shortcutDetails.workingDirectory);
+        } else {
+            m_linkTargetEdit->setEnabled(false);
+            m_linkArgumentsEdit->setEnabled(false);
+            m_linkWorkingDirectoryEdit->setEnabled(false);
+        }
         row++;
     }
 #else
@@ -238,9 +291,10 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
         fileinfoGridLayout->addWidget(line5, row, colLeftMargin, 1, 5);
         row++;
 
-        m_linkTargetEdit = new QLineEdit();
 
         fileinfoGridLayout->addWidget(new QLabel(tr("Target:")), row, colLabel);
+        m_linkTargetEdit = new QLineEdit();
+        m_linkTargetEdit->setText(fileInfo.symLinkTarget());
         fileinfoGridLayout->addWidget(m_linkTargetEdit, row, colField);
         row++;
     }
@@ -255,42 +309,63 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
     fileinfoGridLayout->addWidget(line6, row, colLeftMargin, 1, 5);
     row++;
 
-    // ================= BLOCK 2 =================
-    fileinfoGridLayout->addWidget(new QLabel(tr("Created:")), row, colLabel);
-    fileinfoGridLayout->addWidget(m_createdLabel, row, colField);
-    row++;
+    if (!isDrive) {
+        // ================= BLOCK 2 =================
+        fileinfoGridLayout->addWidget(new QLabel(tr("Created:")), row, colLabel);
+        m_createdLabel = new QLabel();
+        m_createdLabel->setText(fileInfo.birthTime().toString("yyyy-MM-dd  HH:mm:ss"));
+        m_createdLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        fileinfoGridLayout->addWidget(m_createdLabel, row, colField);
+        row++;
 
-    fileinfoGridLayout->addWidget(new QLabel(tr("Modified:")), row, colLabel);
-    fileinfoGridLayout->addWidget(m_modifiedLabel, row, colField);
-    row++;
+        fileinfoGridLayout->addWidget(new QLabel(tr("Modified:")), row, colLabel);
+        m_modifiedLabel = new QLabel();
+        m_modifiedLabel->setText(fileInfo.lastModified().toString("yyyy-MM-dd  HH:mm:ss"));
+        m_modifiedLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        fileinfoGridLayout->addWidget(m_modifiedLabel, row, colField);
+        row++;
 
-    fileinfoGridLayout->addWidget(new QLabel(tr("Accessed:")), row, colLabel);
-    fileinfoGridLayout->addWidget(m_lastReadLabel, row, colField);
-    row++;
+        fileinfoGridLayout->addWidget(new QLabel(tr("Accessed:")), row, colLabel);
+        m_lastReadLabel = new QLabel();
+        m_lastReadLabel->setText(fileInfo.lastRead().toString("yyyy-MM-dd  HH:mm:ss"));
+        m_lastReadLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        fileinfoGridLayout->addWidget(m_lastReadLabel, row, colField);
+        row++;
 
-    // ================= TRENNLINIE =================
-    QFrame *line3 = new QFrame();
-    line3->setFrameShape(QFrame::HLine);
-    line3->setFrameShadow(QFrame::Sunken);
-    fileinfoGridLayout->addWidget(line3, row, colLeftMargin, 1, 5);
-    row++;
+        // ================= TRENNLINIE =================
+        QFrame *line3 = new QFrame();
+        line3->setFrameShape(QFrame::HLine);
+        line3->setFrameShadow(QFrame::Sunken);
+        fileinfoGridLayout->addWidget(line3, row, colLeftMargin, 1, 5);
+        row++;
+    }
 
 #ifdef Q_OS_WIN
-    // Windows Attributes
-    m_readOnlyCB = new QCheckBox(tr("Read-only"));
-    m_hiddenCB = new QCheckBox(tr("Hidden"));
-    m_systemCB = new QCheckBox(tr("System"));
+    if (!isDrive) {
+        // Windows Attributes
+        DWORD fileAttr = getWindowsFileAttributes(fileInfo.filePath());
+        QDir parentDir = fileInfo.dir();
+        bool canModifyAttributes = QFileInfo(parentDir.absolutePath()).isWritable();
 
-    fileinfoGridLayout->addWidget(new QLabel(tr("Attributes:")), row, colLabel);
-    fileinfoGridLayout->addWidget(m_readOnlyCB, row, colField);
-    row++;
+        fileinfoGridLayout->addWidget(new QLabel(tr("Attributes:")), row, colLabel);
+        m_readOnlyCB = new QCheckBox(tr("Read-only"));
+        m_readOnlyCB->setChecked(fileAttr & FILE_ATTRIBUTE_READONLY);
+        m_readOnlyCB->setEnabled(canModifyAttributes);
+        fileinfoGridLayout->addWidget(m_readOnlyCB, row, colField);
+        row++;
 
-    fileinfoGridLayout->addWidget(m_hiddenCB, row, colField);
-    row++;
+        m_hiddenCB = new QCheckBox(tr("Hidden"));
+        m_hiddenCB->setChecked(fileAttr & FILE_ATTRIBUTE_HIDDEN);
+        m_hiddenCB->setEnabled(canModifyAttributes);
+        fileinfoGridLayout->addWidget(m_hiddenCB, row, colField);
+        row++;
 
-    fileinfoGridLayout->addWidget(m_systemCB, row, colField);
-    row++;
-
+        m_systemCB = new QCheckBox(tr("System"));
+        m_systemCB->setChecked(fileAttr & FILE_ATTRIBUTE_SYSTEM);
+        m_systemCB->setEnabled(canModifyAttributes);
+        fileinfoGridLayout->addWidget(m_systemCB, row, colField);
+        row++;
+    }
 #elif defined(Q_OS_LINUX)
 
     m_ownerLabel = new QLabel();
@@ -338,92 +413,7 @@ void FilePropertiesDialog::setupUi(const QFileInfo &fileInfo) {
     fileinfoGridLayout->addLayout(permGrid, row, colField);
     row++;
 
-    // ================= TRENNLINIE =================
-    QFrame *line4 = new QFrame();
-    line4->setFrameShape(QFrame::HLine);
-    line4->setFrameShadow(QFrame::Sunken);
-    fileinfoGridLayout->addWidget(line4, row, colLeftMargin, 1, 5);
-    row++;
-#endif
-
-    mainLayout->addLayout(fileinfoGridLayout);
-
-    // Buttons
-    auto *buttonLayout = new QHBoxLayout();
-    buttonLayout->setContentsMargins(5, 5, 5, 5);
-    buttonLayout->setSpacing(10);
-    auto *okBtn = new QPushButton(tr("OK"));
-    auto *cancelBtn = new QPushButton(tr("Cancel"));
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(okBtn);
-    buttonLayout->addWidget(cancelBtn);
-    mainLayout->addLayout(buttonLayout);
-
-    connect(okBtn, &QPushButton::clicked, this, &FilePropertiesDialog::onOkPressed);
-    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
-}
-
-void FilePropertiesDialog::fillSingleFileInfo(const QFileInfo &fileInfo) {
-
-    // .mimeTypeForFile goes by file extension AND if neccessary by content (magic bytes)
-    QMimeDatabase mimeDb;
-    QMimeType mime = mimeDb.mimeTypeForFile(fileInfo.absoluteFilePath());
-    m_mimeLabel->setText(mime.name());
-
-    QFileIconProvider provider;
-    m_iconLabel->setPixmap(QIcon::fromTheme(mime.iconName(), provider.icon(fileInfo)).pixmap(48, 48));
-    m_nameEdit->setText(fileInfo.fileName());
-    m_pathEdit->setText(QDir::toNativeSeparators(fileInfo.absolutePath()));
-    m_typeLabel->setText(getFileType(fileInfo));
-
-    if (fileInfo.isDir()) {
-        updateUiAsyncStart();
-    } else {
-        if (fileInfo.size() <= 1024) {
-            m_sizeLabel->setText(formatAdaptiveSize(fileInfo.size()));
-        } else {
-            m_sizeLabel->setText(tr("%1 (%2 Bytes)")
-                                     .arg(formatAdaptiveSize(fileInfo.size()))
-                                     .arg(m_locale.toString(fileInfo.size())));
-        }
-
-#ifdef Q_OS_WIN
-        if (fileInfo.fileName().endsWith(".lnk", Qt::CaseInsensitive)) {
-            WinShortcutDetails shortcutDetails;
-            if (getWindowsShortcutDetails(fileInfo.absoluteFilePath(), shortcutDetails)) {
-                m_linkTargetEdit->setText(shortcutDetails.targetPath);
-                m_linkArgumentsEdit->setText(shortcutDetails.arguments);
-                m_linkWorkingDirectoryEdit->setText(shortcutDetails.workingDirectory);
-            } else {
-                m_linkTargetEdit->setEnabled(false);
-                m_linkArgumentsEdit->setEnabled(false);
-                m_linkWorkingDirectoryEdit->setEnabled(false);
-            }
-        }
-#elif defined(Q_OS_LINUX)
-        if (fileInfo.isSymLink()) {
-            m_linkTargetEdit->setText(fileInfo.symLinkTarget());
-        }
-#endif
-    }
-
-    m_createdLabel->setText(fileInfo.birthTime().toString("yyyy-MM-dd  HH:mm:ss"));
-    m_modifiedLabel->setText(fileInfo.lastModified().toString("yyyy-MM-dd  HH:mm:ss"));
-    m_lastReadLabel->setText(fileInfo.lastRead().toString("yyyy-MM-dd  HH:mm:ss"));
-
-#ifdef Q_OS_WIN
-    DWORD fileAttr = getWindowsFileAttributes(fileInfo.filePath());
-    m_readOnlyCB->setChecked(fileAttr & FILE_ATTRIBUTE_READONLY);
-    m_hiddenCB->setChecked(fileAttr & FILE_ATTRIBUTE_HIDDEN);
-    m_systemCB->setChecked(fileAttr & FILE_ATTRIBUTE_SYSTEM);
-
-    QDir parentDir = fileInfo.dir();
-    bool canModifyAttributes = QFileInfo(parentDir.absolutePath()).isWritable();
-
-    m_readOnlyCB->setEnabled(canModifyAttributes);
-    m_hiddenCB->setEnabled(canModifyAttributes);
-    m_systemCB->setEnabled(canModifyAttributes);
-#elif defined(Q_OS_LINUX)
+    // Fill
     QString ownerName = fileInfo.owner();
     if (ownerName.isEmpty()) {
         m_ownerLabel->setText(QString::number(fileInfo.ownerId()));
@@ -467,8 +457,36 @@ void FilePropertiesDialog::fillSingleFileInfo(const QFileInfo &fileInfo) {
     m_permCBs[2][0]->setEnabled(canModify);
     m_permCBs[2][1]->setEnabled(canModify);
     m_permCBs[2][2]->setEnabled(canModify);
+
+    // ================= TRENNLINIE =================
+    QFrame *line4 = new QFrame();
+    line4->setFrameShape(QFrame::HLine);
+    line4->setFrameShadow(QFrame::Sunken);
+    fileinfoGridLayout->addWidget(line4, row, colLeftMargin, 1, 5);
+    row++;
 #endif
+
+    mainLayout->addLayout(fileinfoGridLayout);
+
+    // Buttons
+    auto *buttonLayout = new QHBoxLayout();
+    buttonLayout->setContentsMargins(5, 5, 5, 5);
+    buttonLayout->setSpacing(10);
+    auto *okBtn = new QPushButton(tr("OK"));
+    auto *cancelBtn = new QPushButton(tr("Cancel"));
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(okBtn);
+    buttonLayout->addWidget(cancelBtn);
+    mainLayout->addLayout(buttonLayout);
+
+    connect(okBtn, &QPushButton::clicked, this, &FilePropertiesDialog::onOkPressed);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+
+    if (fileInfo.isDir() && !isDrive) {
+        updateUiAsyncStart();
+    }
 }
+
 
 void FilePropertiesDialog::updateUiAsyncStart() {
     m_watcher = new QFutureWatcher<ProgressResult>(this);
@@ -579,6 +597,25 @@ quint64 FilePropertiesDialog::calculateFolderSize(const QString &rootPath, int &
 }
 
 QString FilePropertiesDialog::getFileType(const QFileInfo &info) {
+    bool isDrive = false;
+#ifdef Q_OS_WIN
+    QString absoluteFilePath = info.absoluteFilePath();
+    isDrive = (absoluteFilePath.length() == 3 && absoluteFilePath.at(1) == ':' && (absoluteFilePath.at(2) == '/' || absoluteFilePath.at(2) == '\\'));
+    if (isDrive) {
+        QStorageInfo storage(info.absoluteFilePath());
+        QString volumeType;
+
+        if (storage.fileSystemType() == "CDFS" || storage.fileSystemType() == "UDF") {
+            volumeType = tr("Optical Drive");
+        } else {
+            volumeType = tr("Local Drive");
+        }
+
+        volumeType = volumeType + " (" + storage.fileSystemType() + ")";
+        return volumeType;
+    }
+#endif
+
     // 1. Windows-Verknüpfungen (.lnk) zuerst abfangen.
     // Da Qt diese intern auch als SymLink einstuft, müssen wir sie isolieren.
     if (info.fileName().endsWith(".lnk", Qt::CaseInsensitive)) {
@@ -603,28 +640,33 @@ QString FilePropertiesDialog::getFileType(const QFileInfo &info) {
 void FilePropertiesDialog::onOkPressed() {
     if (!m_isMultiMode && !m_filePaths.isEmpty()) {
         QString filePath = m_filePaths.first();
-        //QFileInfo fileInfo(filePath);
 
 #ifdef Q_OS_WIN
-        // Aktuelle Attribute holen
-        DWORD attr = GetFileAttributesW(reinterpret_cast<const WCHAR*>(filePath.utf16()));
+        QFileInfo fileInfo(filePath);
+        QString absoluteFilePath = fileInfo.absoluteFilePath();
+        bool isDrive = (absoluteFilePath.length() == 3 && absoluteFilePath.at(1) == ':' && (absoluteFilePath.at(2) == '/' || absoluteFilePath.at(2) == '\\'));
 
-        if (attr != INVALID_FILE_ATTRIBUTES) {
-            // Bits basierend auf Checkboxen setzen oder löschen
-            if (m_readOnlyCB->isChecked()) attr |= FILE_ATTRIBUTE_READONLY;
-            else                           attr &= ~FILE_ATTRIBUTE_READONLY;
+        if (!isDrive) {
+            // Aktuelle Attribute holen
+            DWORD attr = GetFileAttributesW(reinterpret_cast<const WCHAR*>(filePath.utf16()));
 
-            if (m_hiddenCB->isChecked())   attr |= FILE_ATTRIBUTE_HIDDEN;
-            else                           attr &= ~FILE_ATTRIBUTE_HIDDEN;
+            if (attr != INVALID_FILE_ATTRIBUTES) {
+                // Bits basierend auf Checkboxen setzen oder löschen
+                if (m_readOnlyCB->isChecked()) attr |= FILE_ATTRIBUTE_READONLY;
+                else                           attr &= ~FILE_ATTRIBUTE_READONLY;
 
-            if (m_systemCB->isChecked())   attr |= FILE_ATTRIBUTE_SYSTEM;
-            else                           attr &= ~FILE_ATTRIBUTE_SYSTEM;
+                if (m_hiddenCB->isChecked())   attr |= FILE_ATTRIBUTE_HIDDEN;
+                else                           attr &= ~FILE_ATTRIBUTE_HIDDEN;
 
-            // Zurückschreiben
-            if (!SetFileAttributesW(reinterpret_cast<const WCHAR*>(filePath.utf16()), attr)) {
-                QMessageBox::warning(this, tr("Error"),
-                                     tr("Failed to apply file attributes.\nDo you have permission to modify this file?"));
-                return; // Dialog offen lassen
+                if (m_systemCB->isChecked())   attr |= FILE_ATTRIBUTE_SYSTEM;
+                else                           attr &= ~FILE_ATTRIBUTE_SYSTEM;
+
+                // Zurückschreiben
+                if (!SetFileAttributesW(reinterpret_cast<const WCHAR*>(filePath.utf16()), attr)) {
+                    QMessageBox::warning(this, tr("Error"),
+                                         tr("Failed to apply file attributes.\nDo you have permission to modify this file?"));
+                    return; // Dialog offen lassen
+                }
             }
         }
 

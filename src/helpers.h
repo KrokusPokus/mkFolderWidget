@@ -26,6 +26,7 @@ void launchDesktopFile(const DesktopEntry &info, const QStringList &fileList = {
 QString getDisplayName(const QFileInfo &fileInfo, bool showFileExtensions);
 QString getDisplayName(const QString &filePath, bool isDir, bool showFileExtensions);
 QPixmap generateThumbnail(const QString &filePath);
+bool hasImageExt(const QFileInfo &fileInfo);
 bool isCurrentProcessElevated();
 bool onSameStorageDevice(const QString &pathA, const QString &pathB);
 void createInternetShortcut(const QString &urlStr, const QString &targetDir, const QString &webTitle);

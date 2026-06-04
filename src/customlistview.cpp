@@ -214,15 +214,18 @@ void CustomListView::mousePressEvent(QMouseEvent *event) {
         m_selectionAnchor = clicked;
     }
 
+    m_isMouseClickSelection = true;     // Flag aktivieren: Wir befinden uns in einem echten Mausklick
     QListView::mousePressEvent(event);
+    m_isMouseClickSelection = false;    // Direkt danach wieder zurücksetzen
 }
 
 // Part of mitigation for Shift+Up/Shift+Down range selection bug
 void CustomListView::keyPressEvent(QKeyEvent *event) {
     bool shiftPressed = event->modifiers() & Qt::ShiftModifier;
 
-    // Qt die normale Bewegung machen lassen (ändert den currentIndex)
-    QListView::keyPressEvent(event);
+    m_isKeyboardSelection = true;       // Flag aktivieren: Wir befinden uns in einem Tastatur-Event
+    QListView::keyPressEvent(event);    // Qt die normale Bewegung machen lassen (ändert den currentIndex)
+    m_isKeyboardSelection = false;      // Direkt danach wieder zurücksetzen
 
     // Wenn KEIN Shift gedrückt war, wandert der Selektions-Anker stur mit
     if (!shiftPressed) {
@@ -233,10 +236,15 @@ void CustomListView::keyPressEvent(QKeyEvent *event) {
 // Part of mitigation for Shift+Up/Shift+Down range selection bug
 void CustomListView::setSelection(const QRect &rect, QItemSelectionModel::SelectionFlags command) {
     bool isShift = QGuiApplication::keyboardModifiers() & Qt::ShiftModifier;
-    bool isDragging = QGuiApplication::mouseButtons() & Qt::LeftButton;
     QModelIndex current = currentIndex();
 
-    if (!isShift || isDragging || !current.isValid() || !m_selectionAnchor.isValid()) {
+    // Wir erlauben unsere lineare Selektion NUR, wenn das Event nachweislich
+    // von einem direkten Tastendruck oder einem stationären Mausklick stammt.
+    bool safeToLinearize = m_isKeyboardSelection || m_isMouseClickSelection;
+
+    if (!isShift || !safeToLinearize || !current.isValid() || !m_selectionAnchor.isValid()) {
+        // Falls der User wirklich zieht (z.B. Gummiband-Auswahl im leeren Raum),
+        // greift das Standard-Verhalten von Qt.
         QListView::setSelection(rect, command);
         return;
     }

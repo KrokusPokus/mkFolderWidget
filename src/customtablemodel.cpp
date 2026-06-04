@@ -1,8 +1,11 @@
 #include "customtablemodel.h"
 #include "helpers.h"
 
+#include <QApplication>
 #include <QDirIterator>
+#include <QFontMetrics>
 #include <QMimeData>
+#include <QStorageInfo>
 
 CustomTableModel::CustomTableModel(SettingsManager *settings, QObject *parent) : QAbstractTableModel(parent), m_settings(settings) {}
 
@@ -57,7 +60,11 @@ QVariant CustomTableModel::data(const QModelIndex &index, int role) const {
 
         QDir baseDir(m_currentDirectoryPath);
         QString absolutePath = baseDir.filePath(file.name);
-
+#ifdef Q_OS_WIN
+        if (!file.drivePath.isEmpty()) {
+            absolutePath = file.drivePath;
+        }
+#endif
         if (m_thumbnailMode) {
             auto itThumb = m_thumbnailCache.find(absolutePath);
             if (itThumb != m_thumbnailCache.end()) {
@@ -125,6 +132,8 @@ QVariant CustomTableModel::data(const QModelIndex &index, int role) const {
         default:
             return QVariant(Qt::AlignLeft | Qt::AlignVCenter);
         }
+    } else if (role == CustomTableModel::ListViewSizeHintRole) {
+        return file.cachedSize;
     }
 
     return QVariant();
@@ -178,6 +187,9 @@ Qt::ItemFlags CustomTableModel::flags(const QModelIndex &index) const {
         // Nur Ordner dürfen als Drop-Ziel dienen
         int row = index.row();
         if (row >= 0 && row < static_cast<int>(m_files.size())) {
+            if (m_files[row].isDrive) {
+                cellFlags &= ~Qt::ItemIsEditable;
+            }
             if (m_files[row].isDir) {
                 cellFlags |= Qt::ItemIsDropEnabled;
             }
@@ -261,47 +273,104 @@ void CustomTableModel::setFiles(const std::vector<CustomFileInfo> &files) {
 void CustomTableModel::loadDirectory(const QString &dirPath) {
     std::vector<CustomFileInfo> newFiles;
     m_currentDirectoryPath = dirPath;
-    QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot;
-    QDirIterator it(dirPath, filters, QDirIterator::NoIteratorFlags);
-    while (it.hasNext()) {
-        it.next();
 
-        QFileInfo fileInfo = it.fileInfo();
+    // Einmalig die FontMetrics der ListView holen
 
-        CustomFileInfo info;
-        info.name = fileInfo.fileName();
-        info.isDir = fileInfo.isDir();
+    QFontMetrics fm(QApplication::font());
+    const int iconWidth = 16;
+    const int padding = 20;   // Abstand links, rechts, zwischen Icon und Text
+    const int rowHeight = 18; // Feste Höhe für Listenmodus (oder dynamisch)
+
 #ifdef Q_OS_WIN
-        info.isHidden = fileInfo.isHidden() || info.name.startsWith('.');
-#else
-        info.isHidden = fileInfo.isHidden();
-#endif
-        info.size = info.isDir ? 0 : fileInfo.size();
-        info.date = fileInfo.lastModified();
-        info.iconIndex = 0;
+    if (m_currentDirectoryPath == "drives://") {
+        QFileInfoList drives = QDir::drives();
+        for (const QFileInfo &driveInfo : std::as_const(drives)) {
+            CustomFileInfo info;
+            info.drivePath = driveInfo.absoluteFilePath();
 
-        QString ext;
-        info.nameNoExt = info.name;
+            QStorageInfo storage(driveInfo.absoluteFilePath());
+            QString volumeName = storage.name();
 
-        if (!info.isDir) {
-            int lastDot = info.name.lastIndexOf('.');
-            if (lastDot > 0) {
-                if (!m_settings->showFileExtensions) {
-                    info.nameNoExt = info.name.sliced(0, lastDot);
+            // Fallback: Falls das Laufwerk keinen Namen hat (oder z.B. ein leeres CD-Laufwerk ist)
+            if (volumeName.isEmpty()) {
+                if (storage.fileSystemType() == "CDFS" || storage.fileSystemType() == "UDF") {
+                    volumeName = tr("Optical Drive");
+                } else {
+                    volumeName = tr("Local Drive");
                 }
-                ext = info.name.sliced(lastDot + 1).toLower();
             }
+
+            QString driveLetter = driveInfo.absoluteFilePath().left(2);
+
+            info.name = QString("(%1) %2").arg(driveLetter, volumeName);
+
+            info.isDir = true;
+            info.isDrive = true;
+            info.isHidden = false;
+            info.size = storage.bytesTotal();
+            info.date = QDateTime();
+            info.iconIndex = 0;
+            info.nameNoExt = info.name;
+            info.type = storage.fileSystemType();
+            info.isExecutable = false;
+
+            int textWidth = fm.horizontalAdvance(info.nameNoExt);
+            int totalWidth = textWidth + iconWidth + padding;
+            info.cachedSize = QSize(totalWidth, rowHeight);
+
+            m_pathIconCache.insert(info.drivePath, m_iconProvider.icon(driveInfo));
+
+            newFiles.push_back(info);
         }
-
-        info.type = ext;
-
-#ifdef Q_OS_WIN
-        info.isExecutable = (ext == "exe" || ext == "scr");
-#elif defined(Q_OS_LINUX)
-        info.isExecutable = fileInfo.isExecutable();
+    }
+    else
 #endif
+        {
+        QDir::Filters filters = QDir::Files | QDir::Dirs | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot;
+        QDirIterator it(dirPath, filters, QDirIterator::NoIteratorFlags);
+        while (it.hasNext()) {
+            it.next();
+    
+            QFileInfo fileInfo = it.fileInfo();
+    
+            CustomFileInfo info;
+            info.name = fileInfo.fileName();
+            info.isDir = fileInfo.isDir();
+#ifdef Q_OS_WIN
+            info.isHidden = fileInfo.isHidden() || info.name.startsWith('.');
+#else
+            info.isHidden = fileInfo.isHidden();
+#endif
+            info.size = info.isDir ? 0 : fileInfo.size();
+            info.date = fileInfo.lastModified();
+            info.iconIndex = 0;
+    
+            QString ext;
+            info.nameNoExt = info.name;
+    
+            if (!info.isDir) {
+                int lastDot = info.name.lastIndexOf('.');
+                if (lastDot > 0) {
+                    if (!m_settings->showFileExtensions) {
+                        info.nameNoExt = info.name.sliced(0, lastDot);
+                    }
+                    ext = info.name.sliced(lastDot + 1).toLower();
+                }
+            }
+    
+            info.type = ext;
+    
+#ifdef Q_OS_WIN
+            info.isExecutable = (ext == "exe" || ext == "scr");
+#else
+            info.isExecutable = fileInfo.isExecutable();
+#endif
+            int textWidth = fm.horizontalAdvance(info.nameNoExt);
+            int totalWidth = textWidth + iconWidth + padding;
+            info.cachedSize = QSize(totalWidth, rowHeight);
 
-        newFiles.push_back(info);
+            newFiles.push_back(info);
+        }
     }
 
     beginResetModel();
@@ -322,8 +391,15 @@ QString CustomTableModel::filePath(const QModelIndex &index) const {
 
     const CustomFileInfo &file = m_files[row];
 
-    QDir baseDir(m_currentDirectoryPath);
-    return baseDir.filePath(file.name);
+#ifdef Q_OS_WIN
+    if (m_currentDirectoryPath == "drives://") {
+        return file.drivePath;
+    } else
+#endif
+    {
+        QDir baseDir(m_currentDirectoryPath);
+        return baseDir.filePath(file.name);
+    }
 }
 
 bool CustomTableModel::hasPathIcon(const QString &path) const {
@@ -382,7 +458,10 @@ void CustomTableModel::clearCutMarkers() {
 }
 
 bool CustomTableModel::isDirectory(int row) const {
-    if (row < 0 || row >= static_cast<int>(m_files.size())) return false;
+    if (row < 0 || row >= static_cast<int>(m_files.size())) {
+        return false;
+    }
+
     return m_files[row].isDir;
 }
 

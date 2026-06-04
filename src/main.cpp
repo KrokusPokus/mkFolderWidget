@@ -88,7 +88,9 @@ int main(int argc, char *argv[])
     QString targetDir = QDir::cleanPath(parser.value(pOpt));
     QString focusPath = QDir::cleanPath(parser.value(fOpt));
 
-    if (targetDir.isEmpty() || !QDir(targetDir).exists()) {
+    if (targetDir == "::{20d04fe0-3aea-1069-a2d8-08002b30309d}") {
+        targetDir = "drives://";
+    } else if (targetDir.isEmpty() || !QDir(targetDir).exists()) {
         targetDir = QDir::homePath();
     }
 

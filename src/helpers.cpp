@@ -303,6 +303,11 @@ QPixmap generateThumbnail(const QString &filePath) {
     return QPixmap(); // Fallback
 }
 
+bool hasImageExt(const QFileInfo &fileInfo) {
+    QString ext = fileInfo.suffix().toLower();
+    return (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "bmp" || ext == "gif" || ext == "webp" || ext == "jxl");
+}
+
 bool onSameStorageDevice(const QString &pathA, const QString &pathB) {
     QString folderA = QFileInfo(pathA).absolutePath();
     QString folderB = QFileInfo(pathB).absolutePath();

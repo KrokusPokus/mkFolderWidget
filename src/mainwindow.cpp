@@ -51,7 +51,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 {
     this->setMinimumSize(1, 1);
     setWindowTitle(QDir::toNativeSeparators(m_currentDirectory));
-    setWindowIcon(QIcon(":/icons/res/app.ico"));
+    setWindowIcon(QIcon(":/icons/app.ico"));
     resize(728, 545);
 
     m_centralWidget = new QWidget(this);
@@ -94,7 +94,8 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 
     m_tableView = new CustomTableView(this);
     m_tableView->setModel(m_proxyModel);
-    m_tableView->setItemDelegate(new TableItemDelegate(m_tableView));
+    TableItemDelegate *tableItemDelegate = new TableItemDelegate(m_tableView);
+    m_tableView->setItemDelegate(tableItemDelegate);
     m_tableView->setStyle(new CustomDropIndicatorStyle());
 
     m_tableView->setEditTriggers(QAbstractItemView::EditKeyPressed | QAbstractItemView::SelectedClicked);
@@ -129,6 +130,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    background-color: #aa0000;"
             "    alternate-background-color: #880000;"
             "    color: #ffffff;"
+            "    outline: none;"
             "}"
             "QListView::item:hover {"
             "    background-color: #aa0000;"
@@ -147,6 +149,10 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             /* Styling für die Ecke unten rechts */
             "QAbstractScrollArea::corner {"
             "    background: #1b1b1b;"
+            "    border: none;"
+            "}"
+            "QHeaderView {"
+            "    background-color: #404040;"
             "    border: none;"
             "}"
             "QHeaderView::section {"
@@ -168,6 +174,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    background-color: #2e2e2e;"
             "    alternate-background-color: #282828;"
             "    color: #ffffff;"
+            "    outline: none;"
             "}"
             "QListView::item:hover {"
             "    background-color: #2e2e2e;"
@@ -188,6 +195,10 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    background: #1b1b1b;"
             "    border: none;"
             "}"
+            "QHeaderView {"
+            "    background-color: #404040;"
+            "    border: none;"
+            "}"
             "QHeaderView::section {"
             "    border: none;" // Needed to disable native OS style that otherwise prevents background-color from working
             "    background-color: #404040;"
@@ -200,7 +211,6 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "}"
             );
     }
-
 
     m_tableView->verticalScrollBar()->setStyleSheet(
         "QScrollBar:vertical {"
@@ -298,14 +308,14 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 
     m_listView = new CustomListView(this);
     m_listView->setModel(m_proxyModel);
-    m_listView->setItemDelegate(new ListItemDelegate(this));
+    ListItemDelegate *listItemDelegate = new ListItemDelegate(m_tableView);
+    m_listView->setItemDelegate(listItemDelegate);
     m_listView->setStyle(new CustomDropIndicatorStyle());
     m_listView->setViewMode(QListView::IconMode);
     m_listView->setFlow(QListView::TopToBottom);
     m_listView->setWrapping(true);
     m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    //m_listView->setHorizontalScrollMode(QAbstractItemView::ScrollPerItem); // doesn't work
     m_listView->setResizeMode(QListView::Adjust);
     m_listView->setIconSize(QSize(16, 16));
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -331,6 +341,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    border: none;"
             "    background-color: #aa0000;"
             "    color: #ffffff;"
+            "    outline: none;"
             "}"
             "QListView::item {"
             "    padding-top: 0px;"
@@ -364,6 +375,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    border: none;"
             "    background-color: #2e2e2e;"
             "    color: #ffffff;"
+            "    outline: none;"
             "}"
             "QListView::item {"
             "    padding-top: 0px;"
@@ -501,7 +513,8 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
 
     m_thumbnailView = new CustomListView(this);
     m_thumbnailView->setModel(m_proxyModel);
-    m_thumbnailView->setItemDelegate(new ThumbItemDelegate(this));
+    ThumbItemDelegate *thumbItemDelegate = new ThumbItemDelegate(m_tableView);
+    m_thumbnailView->setItemDelegate(thumbItemDelegate);
     m_thumbnailView->setStyle(new CustomDropIndicatorStyle());
     m_thumbnailView->setSelectionModel(m_selectionModel);
     m_thumbnailView->setViewMode(QListView::IconMode);
@@ -528,6 +541,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    border: none;"
             "    background-color: #aa0000;"
             "    color: #ffffff;"
+            "    outline: none;"
             "}"
             "QListView::item {"
             "    padding-top: 0px;"
@@ -561,6 +575,7 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
             "    border: none;"
             "    background-color: #2e2e2e;"
             "    color: #ffffff;"
+            "    outline: none;"
             "}"
             "QListView::item {"
             "    padding-top: 0px;"
@@ -914,18 +929,63 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     connect(m_thumbnailView, &CustomListView::filesDropped, this, [this](const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action) {onFilesDropped(urls, targetDir, action, false); });
     connect(m_tableView, &CustomTableView::filesDropped, this, [this](const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction action) {onFilesDropped(urls, targetDir, action, false); });
 
+    // part of mitigation for Shift+Pos1 / Shift+End not working in tableView
+    connect(m_tableView->selectionModel(), &QItemSelectionModel::currentChanged, this, &MainWindow::onTableCurrentChanged);
 
-    QString showDir = targetDirectory;
-    if (showDir.isEmpty() || !QDir(showDir).exists()) {
-        showDir = QDir::homePath();
-    }
+    // Signale zur Deaktivierung des Watchers während Rename EditBox aktiv ist
+    connect(listItemDelegate, &ListItemDelegate::editingStarted, this, [this]() {
+        m_isEditingFile = true;
+        m_refreshPendingWhileEditing = false;
+    });
+    connect(listItemDelegate, &ListItemDelegate::closeEditor, this, [this]() {
+        m_isEditingFile = false;
+        if (m_refreshPendingWhileEditing) {
+            m_refreshPendingWhileEditing = false;
+            browseFolder(m_currentDirectory);
+        }
+    });
 
-    browseFolder(showDir, focusPath);
+    connect(tableItemDelegate, &TableItemDelegate::editingStarted, this, [this]() {
+        m_isEditingFile = true;
+        m_refreshPendingWhileEditing = false;
+    });
+    connect(tableItemDelegate, &TableItemDelegate::closeEditor, this, [this]() {
+        m_isEditingFile = false;
+        if (m_refreshPendingWhileEditing) {
+            m_refreshPendingWhileEditing = false;
+            browseFolder(m_currentDirectory);
+        }
+    });
+
+    connect(thumbItemDelegate, &ThumbItemDelegate::editingStarted, this, [this]() {
+        m_isEditingFile = true;
+        m_refreshPendingWhileEditing = false;
+    });
+    connect(thumbItemDelegate, &ThumbItemDelegate::closeEditor, this, [this]() {
+        m_isEditingFile = false;
+        if (m_refreshPendingWhileEditing) {
+            m_refreshPendingWhileEditing = false;
+            browseFolder(m_currentDirectory);
+        }
+    });
+
 
     //qDebug() << "Unterstützte Formate:" << QImageReader::supportedImageFormats();
+
+    browseFolder(targetDirectory, focusPath);
 }
 
 MainWindow::~MainWindow() = default;
+
+void MainWindow::onTableCurrentChanged(const QModelIndex &current, const QModelIndex &previous) {
+    Q_UNUSED(previous);
+
+    // Nur wenn SHIFT gerade NICHT gedrückt ist, wandert der Anker mit dem Fokus mit.
+    // Das fängt Mausklicks, Pfeiltasten etc. perfekt und ohne Timer ab!
+    if (!(QApplication::keyboardModifiers() & Qt::ShiftModifier) && current.isValid()) {
+        m_tableView->setProperty("selectionAnchor", current);
+    }
+}
 
 void MainWindow::onFilterBoxChange(const QString &text) {
     if (text != m_activeFilterTerms) {
@@ -950,6 +1010,13 @@ void MainWindow::onListViewHeaderClicked() {
 void MainWindow::onDirectoryChangedOnDisk(const QString &path) {
     Q_UNUSED(path);
 
+    // Used during Rename EditBox to suppress directory reloads
+    if (m_isEditingFile) {
+        m_refreshPendingWhileEditing = true;
+        return;
+    }
+
+    // Used by "New Folder" and "New Textfile" mechanism
     if (m_ignoreNextWatcherSignal) {
         m_ignoreNextWatcherSignal = false;
         return;
@@ -968,14 +1035,16 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
     qDebug() << "browseFolder(" << directoryPath << "," << focusPath << "," << isHistoryNavigation << ")";
     m_BenchmarkTimer.start();
 
-    // Handle non-existing paths
-    QDir dir(directoryPath);
-    while (!dir.exists()) {
-        if (!dir.cdUp()) {
-            directoryPath = QDir::rootPath();
-            break;
+    if (directoryPath != "drives://") {
+        // Handle non-existing paths
+        QDir dir(directoryPath);
+        while (!dir.exists()) {
+            if (!dir.cdUp()) {
+                directoryPath = QDir::rootPath();
+                break;
+            }
+            directoryPath = dir.absolutePath();
         }
-        directoryPath = dir.absolutePath();
     }
 
     // Save history
@@ -1001,8 +1070,8 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
                 continue;
             }
 
-            QModelIndex sourceIdx = m_proxyModel->mapToSource(proxyIdx);
-            QString path = m_abstractModel->filePath(sourceIdx);
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(proxyIdx);
+            QString path = m_abstractModel->filePath(sourceIndex);
             if (!path.isEmpty()) {
                 selectedPathsToRestore.append(path);
             }
@@ -1012,8 +1081,8 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
         if (focusedPathToRestore.isEmpty()) {
             QModelIndex currentProxyIdx = activeView->currentIndex();
             if (currentProxyIdx.isValid()) {
-                QModelIndex sourceIdx = m_proxyModel->mapToSource(currentProxyIdx);
-                focusedPathToRestore = m_abstractModel->filePath(sourceIdx);
+                QModelIndex sourceIndex = m_proxyModel->mapToSource(currentProxyIdx);
+                focusedPathToRestore = m_abstractModel->filePath(sourceIndex);
             }
         }
     }
@@ -1044,7 +1113,7 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
     if (!watchedPaths.isEmpty()) {
         m_fileSystemWatcher->removePaths(watchedPaths);
     }
-    if (!directoryPath.isEmpty() && QFileInfo(directoryPath).isDir()) {
+    if (!directoryPath.isEmpty() && QFileInfo(directoryPath).isDir() && (directoryPath != "drives://")) {
         m_fileSystemWatcher->addPath(directoryPath);
     }
     qDebug() << "browseFolder():" << m_BenchmarkTimer.elapsed() << " ms elapsed till m_fileSystemWatcher updated";
@@ -1064,8 +1133,8 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
         int colCount = m_proxyModel->columnCount();
         for (int i = 0; i < rowCount; ++i) {
             QModelIndex proxyIdx = m_proxyModel->index(i, 0);
-            QModelIndex sourceIdx = m_proxyModel->mapToSource(proxyIdx);
-            QString currentPath = m_abstractModel->filePath(sourceIdx);
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(proxyIdx);
+            QString currentPath = m_abstractModel->filePath(sourceIndex);
 
             // Prüfen, ob diese Zeile selektiert war
             if (selectedSet.contains(currentPath)) {
@@ -1099,9 +1168,14 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
         m_selectionModel->blockSignals(false);
     }
 
-    setWindowTitle(QDir::toNativeSeparators(m_currentDirectory));
-    QFileInfo fileInfo(m_currentDirectory);
-    setWindowIcon(m_iconProvider.icon(fileInfo));
+    if (m_currentDirectory == "drives://") {
+        setWindowTitle(tr("This Computer"));
+        setWindowIcon(style()->standardIcon(QStyle::SP_ComputerIcon));
+    } else {
+        setWindowTitle(QDir::toNativeSeparators(m_currentDirectory));
+        QFileInfo fileInfo(m_currentDirectory);
+        setWindowIcon(m_iconProvider.icon(fileInfo));
+    }
 
     // --- Update columns of tableView ---
     if (m_viewStack->currentWidget() == m_tableView) {
@@ -1110,8 +1184,6 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
         qDebug() << "browseFolder():" << m_BenchmarkTimer.elapsed() << " ms elapsed till end of updateColumns()";
     }
 
-    qDebug() << "browseFolder():" << m_BenchmarkTimer.elapsed() << " ms elapsed total";
-
     if (activeView) {
         QModelIndex currentIdx = activeView->currentIndex();
         if (currentIdx.isValid()) {
@@ -1119,19 +1191,31 @@ void MainWindow::browseFolder(QString directoryPath, const QString &focusPath, b
         }
     }
 
+    qDebug() << "browseFolder():" << m_BenchmarkTimer.elapsed() << " ms elapsed total";
+
     m_timerUpdateIcons->start(20);
 }
 
 void MainWindow::navigateUp() {
+#ifdef Q_OS_WIN
+    if (m_currentDirectory == "drives://") return;
+#endif
+
     QDir currentDir(m_currentDirectory);
-    if (currentDir.isRoot()) return;
+    if (currentDir.isRoot()) {
+#ifdef Q_OS_WIN
+        QString focusPath = currentDir.absolutePath();
+        browseFolder("drives://", focusPath);
+#endif
+    } else {
+        QString focusPath = currentDir.absolutePath();
+        currentDir.cdUp();
+        QString parentPath = currentDir.absolutePath();
 
-    QString focusPath = currentDir.absolutePath();
-    currentDir.cdUp();
-    QString parentPath = currentDir.absolutePath();
-
-    browseFolder(parentPath, focusPath);
+        browseFolder(parentPath, focusPath);
+    }
 }
+
 
 void MainWindow::navigateBack() {
     if (m_backHistory.isEmpty()) return;
@@ -1207,6 +1291,11 @@ void MainWindow::onShowContextMenu(QAbstractItemView *senderView, const QPoint &
         subMenuNew->addAction(m_actionListViewNewFolder);
         subMenuNew->addAction(m_actionListViewNewTextFile);
 
+        mainMenu.addSeparator(); //-----------------------------------------
+        mainMenu.addAction(m_actionListViewFileProperties);
+    } else if (m_currentDirectory == "drives://") {
+        mainMenu.addAction(m_actionListViewOpenFiles);
+        mainMenu.setDefaultAction(m_actionListViewOpenFiles);
         mainMenu.addSeparator(); //-----------------------------------------
         mainMenu.addAction(m_actionListViewFileProperties);
     } else {
@@ -1341,7 +1430,7 @@ QSet<int> MainWindow::getActiveViewRowSet() {
     return rowSet;
 }
 
-void MainWindow::onListItemDoubleClicked(const QModelIndex &index) {
+void MainWindow::onListItemDoubleClicked(const QModelIndex &proxyIndex) {
     // We put this in a timer, so we can finish processing this double click event before the folder change fires.
     // This is to prevent the glitch that the focused file in the new folder is set in name edit mode if our mouse happens to hover over it.
     QTimer::singleShot(0, this, [this]() {
@@ -1390,6 +1479,8 @@ void MainWindow::action_ListViewOpenFiles() {
 }
 
 void MainWindow::action_ListViewEditFiles() {
+    if (m_currentDirectory == "drives://") return;
+
     QStringList pathList = getActiveViewPathList();
     if (pathList.isEmpty()) return;
 
@@ -1435,6 +1526,8 @@ void MainWindow::action_ListViewEditFiles() {
 }
 
 void MainWindow::action_ListViewCopyPaths() {
+    if (m_currentDirectory == "drives://") return;
+
     QStringList pathList = getActiveViewPathList();
     if (pathList.isEmpty()) return;
 
@@ -1453,6 +1546,8 @@ void MainWindow::action_ListViewCopyPaths() {
 }
 
 void MainWindow::action_ListViewDeleteFiles(bool bRecycleOnly) {
+    if (m_currentDirectory == "drives://") return;
+
     QStringList pathList = getActiveViewPathList();
     if (pathList.isEmpty()) {
         return;
@@ -1487,6 +1582,8 @@ void MainWindow::action_ListViewDeleteFiles(bool bRecycleOnly) {
 }
 
 void MainWindow::action_ListViewCutFiles() {
+    if (m_currentDirectory == "drives://") return;
+
     QStringList pathList = getActiveViewPathList();
     if (pathList.isEmpty()) return;
 
@@ -1495,6 +1592,8 @@ void MainWindow::action_ListViewCutFiles() {
 }
 
 void MainWindow::action_ListViewCopyFiles() {
+    if (m_currentDirectory == "drives://") return;
+
     QStringList pathList = getActiveViewPathList();
     if (pathList.isEmpty()) return;
 
@@ -1569,15 +1668,15 @@ void MainWindow::action_ListViewRenameFiles() {
     auto *activeView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
     if (!activeView) return;
 
-    QModelIndex index = activeView->currentIndex();
-    if (!index.isValid()) return;
+    QModelIndex proxyIndex = activeView->currentIndex();
+    if (!proxyIndex.isValid()) return;
 
-    index = index.siblingAtColumn(eColName);
+    proxyIndex = proxyIndex.siblingAtColumn(eColName);
 
     activeView->setFocus();
-    activeView->setCurrentIndex(index);
+    activeView->setCurrentIndex(proxyIndex);
 
-    activeView->edit(index);
+    activeView->edit(proxyIndex);
 }
 
 void MainWindow::action_ListViewFileProperties() {
@@ -1596,6 +1695,8 @@ void MainWindow::action_ListViewFileProperties() {
 
 
 void MainWindow::action_ListViewPasteFiles() {
+    if (m_currentDirectory == "drives://") return;
+
     const QMimeData *mimeData = QApplication::clipboard()->mimeData();
     if (!mimeData || !mimeData->hasUrls()) return;
 
@@ -1845,6 +1946,8 @@ void MainWindow::onFilesDropped(const QList<QUrl> &urlList, const QString &targe
 }
 
 void MainWindow::action_ListViewNewFolder() {
+    if (m_currentDirectory == "drives://") return;
+
     // 1. Create unique dummy name
     QDir dir(m_currentDirectory);
     QString baseName = tr("New Folder");
@@ -1897,6 +2000,8 @@ void MainWindow::action_ListViewNewFolder() {
 }
 
 void MainWindow::action_ListViewNewTextFile() {
+    if (m_currentDirectory == "drives://") return;
+
     if (m_currentDirectory.isEmpty()) return;
 
     QString baseName = tr("New Text Document");
@@ -2050,11 +2155,7 @@ void MainWindow::onTimedUpdateIcons() {
                 break;
             }
 
-            // 2. Ist es überhaupt eine Bilddatei? (Schneller String-Check vorab)
-            QString ext = fileInfo.suffix().toLower();
-            bool isImage = (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "bmp" || ext == "gif" || ext == "webp" || ext == "jxl");
-
-            if (isImage) {
+            if (hasImageExt(fileInfo)) {
                 QPixmap thumb = generateThumbnail(fullPath);
                 if (!thumb.isNull()) {
                     m_abstractModel->addPathThumbnail(fullPath, thumb, sourceIndex.row());
@@ -2313,11 +2414,14 @@ bool MainWindow::showDeleteConfirmationDialog(const QStringList &pathList, bool 
         QString size = formatAdaptiveSize(fileInfo.size());
         QString lastModified = fileInfo.lastModified().toString("yyyy-MM-dd  HH:mm:ss");
 
-        QFileIconProvider provider;
-        QIcon icon = provider.icon(fileInfo);
+        QIcon icon = m_iconProvider.icon(fileInfo);
         QPixmap pix = icon.pixmap(QSize(48, 48));
-        QList mySize = icon.availableSizes();
-        qDebug() << "showDeleteConfirmationDialog() mySize:" << mySize;
+        if (hasImageExt(fileInfo)) {
+            QPixmap thumb = generateThumbnail(fileInfo.absoluteFilePath());
+            if (!thumb.isNull()) {
+                pix = thumb;
+            }
+        }
 
         QByteArray ba;
         QBuffer bu(&ba);
@@ -2434,9 +2538,14 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
 
                         targetPath = QDir::cleanPath(targetPath);
 
+                        if (targetPath == "::{20d04fe0-3aea-1069-a2d8-08002b30309d}") {
+                            browseFolder("drives://", QString());
+                            *result = TRUE;
+                            return true;
+                        }
+
                         QDir targetDir(targetPath);
                         if (targetDir.exists()) {
-
                             QString focusPath;
                             if (!focusFile.isEmpty()) {
                                 focusPath = targetDir.filePath(focusFile);
@@ -2476,26 +2585,21 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 // Installed on qApp
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
-    /* // This code doesn't work as intended (cursor still stays the same until MouseButtonRelease)
-    if (event->type() == QEvent::DragLeave || event->type() == QEvent::Drop) {
-        if (obj == m_listView->viewport() || obj == m_tableView->viewport() || obj == m_thumbnailView->viewport()) {
-            auto *targetView = qobject_cast<QAbstractItemView*>(obj->parent());
-            targetView->viewport()->unsetCursor();
-
-            while (QApplication::overrideCursor()) {
-                QApplication::restoreOverrideCursor();
-            }
-        }
-    }
-    else */ if (event->type() == QEvent::Resize) {
+    if (event->type() == QEvent::Resize) {
         if (obj == m_tableView->viewport() || obj == m_listView->viewport() || obj == m_thumbnailView->viewport()) {
-            updateColumns();
+            if (obj == m_tableView->viewport()) {
+                QTimer::singleShot(0, this, [this]() {
+                    updateColumns();
+                });
+            }
 
-            auto *activeView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
-            if (activeView) {
-                QModelIndex currentIdx = activeView->currentIndex();
+            auto *targetView = qobject_cast<QAbstractItemView*>(obj->parent());
+            if (targetView) {
+                QModelIndex currentIdx = targetView->currentIndex();
                 if (currentIdx.isValid()) {
-                    activeView->scrollTo(currentIdx, QAbstractItemView::EnsureVisible);
+                    QTimer::singleShot(0, this, [this, targetView, currentIdx]() {
+                        targetView->scrollTo(currentIdx, QAbstractItemView::EnsureVisible);
+                    });
                 }
             }
 
@@ -2544,6 +2648,77 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     }
     else if (event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+        QWidget *targetWidget = qobject_cast<QWidget*>(obj);
+        if (!targetWidget || targetWidget->window() != this) {
+            return QObject::eventFilter(obj, event); // Nicht unser Fenster -> Ignorieren und weiterleiten
+        }
+
+        // EXKLUSIVES HANDLING NUR FÜR QTABLEVIEW BEI POS1 / ENDE
+        if (obj == m_tableView) {
+            if (keyEvent->key() == Qt::Key_Home || keyEvent->key() == Qt::Key_End) {
+                if (m_tableView->model() && m_tableView->model()->rowCount() > 0) {
+
+                    int targetRow = (keyEvent->key() == Qt::Key_Home) ? 0 : m_tableView->model()->rowCount() - 1;
+                    int targetCol = m_tableView->currentIndex().isValid() ? m_tableView->currentIndex().column() : 0;
+
+                    // Ausgeblendete Spalten überspringen
+                    if (m_tableView->isColumnHidden(targetCol)) {
+                        for (int c = 0; c < m_tableView->model()->columnCount(); ++c) {
+                            if (!m_tableView->isColumnHidden(c)) {
+                                targetCol = c;
+                                break;
+                            }
+                        }
+                    }
+
+                    QModelIndex targetIndex = m_tableView->model()->index(targetRow, targetCol);
+                    if (targetIndex.isValid()) {
+
+                        if (keyEvent->modifiers() & Qt::ShiftModifier) {
+                            // 1. Unseren im Slot bombenfest gepflegten Anker auslesen
+                            QVariant anchorVar = m_tableView->property("selectionAnchor");
+                            QModelIndex anchorIndex;
+                            if (anchorVar.isValid()) {
+                                anchorIndex = anchorVar.value<QModelIndex>();
+                            }
+
+                            // Fallback, falls beim allerersten Start noch nichts gesetzt war
+                            if (!anchorIndex.isValid() || anchorIndex.model() != m_tableView->model()) {
+                                anchorIndex = m_tableView->currentIndex();
+                                if (!anchorIndex.isValid()) anchorIndex = m_tableView->model()->index(0, targetCol);
+                                m_tableView->setProperty("selectionAnchor", anchorIndex);
+                            }
+
+                            // 2. Selektion exakt vom eingefrorenen Anker bis zum Ziel (0 oder Ende) spannen
+                            int startRow = anchorIndex.row();
+                            QModelIndex topLeft = m_tableView->model()->index(qMin(startRow, targetRow), 0);
+                            QModelIndex bottomRight = m_tableView->model()->index(qMax(startRow, targetRow), m_tableView->model()->columnCount() - 1);
+                            QItemSelection selection(topLeft, bottomRight);
+
+                            QItemSelectionModel::SelectionFlags flags = QItemSelectionModel::ClearAndSelect;
+                            if (m_tableView->selectionBehavior() == QAbstractItemView::SelectRows) {
+                                flags |= QItemSelectionModel::Rows;
+                            }
+
+                            m_tableView->selectionModel()->select(selection, flags);
+
+                            // Fokusrahmen verschieben. Da SHIFT gedrückt ist, ignoriert unser
+                            // 'onTableCurrentChanged'-Slot diese Änderung, und der Anker bleibt fixiert!
+                            m_tableView->selectionModel()->setCurrentIndex(targetIndex, QItemSelectionModel::NoUpdate);
+                        }
+                        else {
+                            // Ohne Shift: Normaler Sprung. 'setCurrentIndex' triggert den Slot,
+                            // welcher den Anker automatisch auf das neue Ziel setzt.
+                            m_tableView->setCurrentIndex(targetIndex);
+                        }
+
+                        m_tableView->scrollTo(targetIndex);
+                    }
+                }
+                return true; // Event für Qt fressen
+            }
+        }
 
         // global CTRL+SHIFT+ keys that work independent of active control
         if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
@@ -2631,23 +2806,15 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         }
 
         if (obj == m_tableView || obj == m_listView || obj == m_thumbnailView) {
-            // Check if focus is actually on a widget inside m_tableView's viewport (the editor)
+            // Wenn in der View gerade ein Editor offen ist (z.B. Dateiname umbenennen),
+            // dürfen wir Tasten wie "Entf", "Backspace" oder "Enter" NICHT abfangen!
             auto *view = qobject_cast<QAbstractItemView*>(obj);
             if (view && view->viewport()->focusWidget()) {
-                return false;
+                return QObject::eventFilter(obj, event);
             }
 
             if (keyEvent->key() == Qt::Key_Delete && keyEvent->modifiers() & Qt::ShiftModifier) {
                 action_ListViewDeleteFiles(false);
-                return true;
-            } else if (keyEvent->key() == Qt::Key_Backspace && keyEvent->modifiers() == Qt::NoModifier) {
-                navigateUp();
-                return true;
-            } else if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return) {
-                action_ListViewOpenFiles();
-                return true;
-            } else if (keyEvent->key() == Qt::Key_F5) {
-                browseFolder(m_currentDirectory);
                 return true;
             } else if (keyEvent->key() == Qt::Key_A && keyEvent->modifiers() == Qt::ControlModifier) {
                 selectAllItems();
@@ -2655,6 +2822,15 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             } else if (keyEvent->key() == Qt::Key_F && keyEvent->modifiers() == Qt::ControlModifier) {
                 m_topControlsContainerWidget->show();
                 m_LineEdit1->setFocus();
+                return true;
+            } else if (keyEvent->key() == Qt::Key_F5) {
+                browseFolder(m_currentDirectory);
+                return true;
+            } else if (keyEvent->key() == Qt::Key_Backspace) {
+                navigateUp();
+                return true;
+            } else if (keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Return) {
+                action_ListViewOpenFiles();
                 return true;
             }
         }
@@ -2674,5 +2850,5 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         }
     }
 
-    return false;
+    return QObject::eventFilter(obj, event);
 }

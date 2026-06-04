@@ -27,8 +27,10 @@ private:
     bool m_isSameFolderCached = false;
     bool m_isSameDriveCached = false;
 
-    QModelIndex m_selectionAnchor;  // Part of mitigation for Shift+Up/Shift+Down range selection bug. Not needed in tableView
-
+    // Part of mitigation for Shift+Up/Shift+Down range selection bug. Not needed in tableView
+    QModelIndex m_selectionAnchor;
+    bool m_isMouseClickSelection = false;
+    bool m_isKeyboardSelection = false;
 
 
 protected:

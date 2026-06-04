@@ -14,12 +14,15 @@
 struct CustomFileInfo {
     QString name;
     QString nameNoExt;
+    QString drivePath;
     qint64 size;
     QDateTime date;
     QString type;
+    QSize cachedSize;
     int iconIndex;
     bool isCut = false;
     bool isDir;
+    bool isDrive = false;
     bool isExecutable;
     bool isHidden;
 };
@@ -39,7 +42,8 @@ public:
         IsExecutableRole = Qt::UserRole + 3,
         IsHiddenRole = Qt::UserRole + 4,
         UseRedTextRole = Qt::UserRole + 5,
-        FullFileInfoRole = Qt::UserRole + 6
+        FullFileInfoRole = Qt::UserRole + 6,
+        ListViewSizeHintRole = Qt::UserRole + 7
     };
 
     explicit CustomTableModel(SettingsManager *settings, QObject *parent = nullptr);
@@ -75,6 +79,7 @@ public:
     void setCutMarkers(const QStringList &absolutePaths);
     void clearCutMarkers();
     bool isDirectory(int row) const;
+
     const QString &currentDirectoryPath() const { return m_currentDirectoryPath; }
 
     void setThumbnailMode(bool enabled) {
