@@ -85,7 +85,15 @@ int main(int argc, char *argv[])
 
     //-----------------------------------------------------------------------------------------
 
-    QString targetDir = QDir::cleanPath(parser.value(pOpt));
+    QString targetDir = parser.value(pOpt);
+
+    // Falls der Windows-Parser den Backslash geschluckt und ein " an den String gehängt hat:
+    if (targetDir.endsWith('"')) {
+        targetDir.chop(1);  // Das falsche Anführungszeichen abschneiden
+        targetDir += "/";   // Einen sauberen Ordner-Abschluss hinzufügen
+    }
+    targetDir = QDir::cleanPath(targetDir);
+
     QString focusPath = QDir::cleanPath(parser.value(fOpt));
 
     if (targetDir == "::{20d04fe0-3aea-1069-a2d8-08002b30309d}") {

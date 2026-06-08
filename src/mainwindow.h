@@ -460,7 +460,7 @@ private slots:
     void onVerticalBarScrollChange();
     void onHorizontalBarScrollChange();
     void setViewMode(int index);
-    void triggerDirectoryReload();
+    void reloadDirectory();
     void onFilterBoxChange(const QString &text);
     void onTableCurrentChanged(const QModelIndex &current, const QModelIndex &previous);
 
@@ -495,14 +495,16 @@ private:
     void action_ViewModeThumbs();
     void browseFolder(QString directoryPath, const QString &focusPath = QString(), bool isHistoryNavigation = false);
     void loadMimeCache();
-    void navigateUp();
     void navigateBack();
     void navigateForward();
+    void navigateToClipboardPath();
+    void navigateUp();
     void onFilesDropped(const QList<QUrl> &urls, const QString &targetDir, Qt::DropAction dropAction, bool fromClipboard = false);
     void onShowContextMenu(QAbstractItemView *senderView, const QPoint &pos);
     void parseMimeAppsList(const QString &path);
     void parseMimeInfoCache(const QString &path);
     void removeCutMarkers();
+    void scrollToCurrentItem();
     void selectAllItems();
     void setupClipboardForCopyOrCut(const QStringList &cutFilePaths, bool isCut);
     void updateColumns();
@@ -534,10 +536,11 @@ private:
     QAction *m_actionViewModeList = nullptr;
     QAction *m_actionViewModeDetails = nullptr;
     QAction *m_actionViewModeThumbs = nullptr;
-    QTimer *m_timerUpdateIcons = nullptr;
 
     QFileSystemWatcher* m_fileSystemWatcher = nullptr;
+    QTimer *m_timerUpdateIcons = nullptr;
     QTimer *m_watcherDebounceTimer = nullptr;
+    QTimer *m_scrollToDebounceTimer = nullptr;
     bool m_ignoreNextWatcherSignal = false; // Flag für eigene Datei-Aktionen
 
     bool m_bShowHiddenFiles = false;

@@ -904,11 +904,13 @@ MainWindow::MainWindow(const QString &targetDirectory, const QString &focusPath,
     m_timerUpdateIcons->setSingleShot(true);
     connect(m_timerUpdateIcons, &QTimer::timeout, this, &MainWindow::onTimedUpdateIcons);
 
-    // --------------------------------------------------------------------
-
     m_watcherDebounceTimer = new QTimer(this);
     m_watcherDebounceTimer->setSingleShot(true);
-    connect(m_watcherDebounceTimer, &QTimer::timeout, this, &MainWindow::triggerDirectoryReload);
+    connect(m_watcherDebounceTimer, &QTimer::timeout, this, &MainWindow::reloadDirectory);
+
+    m_scrollToDebounceTimer = new QTimer(this);
+    m_scrollToDebounceTimer->setSingleShot(true);
+    connect(m_scrollToDebounceTimer, &QTimer::timeout, this, &MainWindow::scrollToCurrentItem);
 
     // --------------------------------------------------------------------
 
@@ -1025,7 +1027,20 @@ void MainWindow::onDirectoryChangedOnDisk(const QString &path) {
     m_watcherDebounceTimer->start(100);
 }
 
-void MainWindow::triggerDirectoryReload() {
+void MainWindow::scrollToCurrentItem() {
+    auto *activeView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+    if (!activeView) return;
+
+    if (m_proxyModel && m_proxyModel->rowCount() > 0) {
+        QModelIndex currentIdx = activeView->currentIndex();
+
+        if (currentIdx.isValid()) {
+            activeView->scrollTo(currentIdx, QAbstractItemView::EnsureVisible);
+        }
+    }
+}
+
+void MainWindow::reloadDirectory() {
     if (!m_currentDirectory.isEmpty()) {
         browseFolder(m_currentDirectory);
     }
@@ -2074,7 +2089,8 @@ void MainWindow::action_EditSettingsFile() {
 }
 
 void MainWindow::onTimedUpdateIcons() {
-    if (m_proxyModel->rowCount() == 0) return;
+    if (!m_proxyModel || m_proxyModel->rowCount() == 0) return;
+    if (!m_abstractModel) return;
 
     // 1. Herausfinden, welche View gerade sichtbar ist
     auto *activeView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
@@ -2136,15 +2152,31 @@ void MainWindow::onTimedUpdateIcons() {
 
     // 3. Nur die aktuell sichtbaren Zeilen durchlaufen
     for (int i = firstVisible; i <= lastVisible; ++i) {
+        if (i >= m_proxyModel->rowCount()) {
+            break;
+        }
+
         QModelIndex proxyIndex = m_proxyModel->index(i, 0);
+        if (!proxyIndex.isValid()) {
+            continue;
+        }
 
-        // Umrechnen in das echte Modell
         QModelIndex sourceIndex = m_proxyModel->mapToSource(proxyIndex);
-        QString fullPath = m_abstractModel->filePath(sourceIndex);
+        if (!sourceIndex.isValid()) {
+            continue;
+        }
 
+        if (sourceIndex.row() >= m_abstractModel->rowCount(QModelIndex())) {
+            continue;
+        }
+
+        QString fullPath = m_abstractModel->filePath(sourceIndex);
         if (fullPath.isEmpty()) continue;
 
         QFileInfo fileInfo(fullPath);
+        if (!fileInfo.exists()) {
+            continue;
+        }
 
         if (isThumbnailMode) {
             // 1. Haben wir das Bild schon im Thumbnail-Cache?
@@ -2495,6 +2527,33 @@ void MainWindow::selectAllItems() {
     activeView->selectionModel()->select(selection, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
 }
 
+void MainWindow::navigateToClipboardPath() {
+    QClipboard *clipboard = QApplication::clipboard();
+    if (!clipboard) return;
+
+    QString text = clipboard->text().trimmed();
+    if (text.isEmpty()) return;
+
+    if (text.startsWith('"') && text.endsWith('"')) {
+        text = text.mid(1, text.length() - 2);
+    }
+
+    if (text.startsWith("file:///")) {
+        text = QUrl(text).toLocalFile();
+    }
+
+    QFileInfo fileInfo(text);
+    if (!fileInfo.exists()) return;
+
+    if (fileInfo.isDir()) {
+        browseFolder(fileInfo.absoluteFilePath(), QString());
+    } else {
+        browseFolder(fileInfo.absolutePath(), fileInfo.absoluteFilePath());
+    }
+
+    return;
+}
+
 //######################################################################################
 // Functions to receive data from other applications
 
@@ -2593,15 +2652,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
                 });
             }
 
-            auto *targetView = qobject_cast<QAbstractItemView*>(obj->parent());
-            if (targetView) {
-                QModelIndex currentIdx = targetView->currentIndex();
-                if (currentIdx.isValid()) {
-                    QTimer::singleShot(0, this, [this, targetView, currentIdx]() {
-                        targetView->scrollTo(currentIdx, QAbstractItemView::EnsureVisible);
-                    });
-                }
-            }
+            m_scrollToDebounceTimer->start(100);
 
             m_timerUpdateIcons->start(20);
         }
@@ -2823,8 +2874,11 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
                 m_topControlsContainerWidget->show();
                 m_LineEdit1->setFocus();
                 return true;
+            } else if (keyEvent->key() == Qt::Key_P && keyEvent->modifiers() == Qt::ControlModifier) {
+                navigateToClipboardPath();
+                return true;
             } else if (keyEvent->key() == Qt::Key_F5) {
-                browseFolder(m_currentDirectory);
+                reloadDirectory();
                 return true;
             } else if (keyEvent->key() == Qt::Key_Backspace) {
                 navigateUp();
